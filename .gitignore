@@ -1,0 +1,32 @@
+# secrets
+.env
+.env.*
+!.env.example
+
+# dataset, derived artefacts, model caches, run outputs (never committed: licence + size)
+/data/
+/cache/
+/runs/
+/gt/
+*.mp4
+*.mov
+*.pcd
+*.pkl.gz
+
+# python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+dist/
+*.egg-info/
+
+# web
+web/node_modules/
+web/dist/
+
+# os / editors
+.DS_Store
+.idea/
+.vscode/

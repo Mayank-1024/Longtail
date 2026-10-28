@@ -1,0 +1,13 @@
+# Reviews: every PR needs the other person's approval (branch protection).
+# TODO: replace CHETHAN_HANDLE with Chethan's GitHub username once he accepts the invite.
+/longtail/llm/       @Mayank-1024
+/longtail/agent/     @Mayank-1024
+/longtail/triage/    @Mayank-1024
+/longtail/explain/   @Mayank-1024
+/api/                @Mayank-1024
+/web/                @Mayank-1024
+# /longtail/data/      @CHETHAN_HANDLE
+# /longtail/geometry/  @CHETHAN_HANDLE
+# /longtail/vision/    @CHETHAN_HANDLE
+# /longtail/verify/    @CHETHAN_HANDLE
+# /longtail/contracts.py @Mayank-1024 @CHETHAN_HANDLE
