@@ -8,7 +8,12 @@ requires-python = ">=3.11"
 dependencies = [
     "pydantic>=2.7",
     "numpy>=1.26",
+    # ASSUMPTION A-01: dataset is PandaSet; official devkit pinned by commit (master, 2022-03-23)
+    "pandaset @ git+https://github.com/scaleapi/pandaset-devkit@59be180e2a3f3e37f6d66af9e67bf944ccbf6ec0#subdirectory=python",
 ]
+
+[project.scripts]
+longtail = "longtail.cli:main"
 
 [dependency-groups]
 dev = [
@@ -19,6 +24,10 @@ dev = [
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.metadata]
+# Needed for the devkit's git URL dependency.
+allow-direct-references = true
 
 [tool.ruff]
 line-length = 110
