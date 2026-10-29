@@ -541,3 +541,51 @@ def track_source(scene: SyntheticScene, objects: dict, extra: dict | None = None
         return out + [t for t in (extra or {}).get(concept, []) if t.camera == camera]
 
     return source
+
+
+class ImageScene(SyntheticScene):
+    """The synthetic scene with camera images rendered to disk, so clips can be encoded (C3 tests).
+
+    Each image is a plain background, object silhouettes in fixed colours, and a stripe along the top whose
+    grey level encodes the frame index (so a dropped, duplicated or reordered frame shows after decoding).
+    """
+
+    COLOURS = {
+        "crosser": (0, 200, 255),
+        "parked": (255, 140, 0),
+        "ped_a": (120, 255, 80),
+        "ped_b": (255, 80, 200),
+        "pass_car": (200, 200, 0),
+        "car_a": (90, 90, 255),
+        "car_b": (255, 255, 255),
+    }
+
+    def __init__(
+        self, image_dir: Path, config: SyntheticConfig | None = None, scene_id: str = "synthetic"
+    ) -> None:
+        super().__init__(config, scene_id)
+        self.image_dir = Path(image_dir)
+
+    @staticmethod
+    def stripe_level(frame_idx: int) -> int:
+        return (40 + 7 * frame_idx) % 256
+
+    def frames(self, camera: str) -> list[CameraFrame]:
+        from PIL import Image
+
+        out = []
+        for f in super().frames(camera):
+            path = self.image_dir / camera / f"{f.frame_idx:03d}.png"
+            if not path.is_file():
+                w, h = self.cfg.image_size
+                arr = np.full((h, w, 3), 40, np.uint8)
+                objs = self.objects(f.ts)
+                # Far objects first, so nearer silhouettes paint over them.
+                drawn = [(name, _silhouette(self, obj, camera, f.ts)) for name, obj in objs.items()]
+                for name, sil in sorted(((n, s) for n, s in drawn if s is not None), key=lambda x: -x[1][1]):
+                    arr[sil[0]] = self.COLOURS.get(name, (200, 200, 200))
+                arr[:8] = self.stripe_level(f.frame_idx)
+                path.parent.mkdir(parents=True, exist_ok=True)
+                Image.fromarray(arr).save(path)
+            out.append(CameraFrame(frame_idx=f.frame_idx, ts=f.ts, image_path=path))
+        return out
