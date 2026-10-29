@@ -118,7 +118,9 @@ def test_samples_carry_both_frames_and_counts(scene, crosser):
     np.testing.assert_allclose(s.xyz_ego, ego_of_world, atol=0.15)
     assert s.n_points >= 15 and s.coverage >= s.n_points
     length, width, height = s.extent_lwh
-    assert length >= width and 1.2 < height <= 1.7
+    assert length >= width
+    # ASSUMPTION A-53: height is the top above the local ground, so the 0.2 m ground cut does not shrink it
+    assert height == pytest.approx(scene.cfg.crosser_lwh[2], abs=0.15)
     # ASSUMPTION A-48: C5 fills speeds
     assert crosser.track.speed_mps == []
     assert crosser.track.cls == "pedestrian" and crosser.track.sources == [("front_camera", 1)]
@@ -162,7 +164,7 @@ def test_mask_on_wall_only_returns_the_wall_at_its_real_size(scene):
         wall = pts[ids == WALL]
         length, width, height = sample.extent_lwh
         assert length == pytest.approx(np.ptp(wall @ scene._fwd), abs=0.3)
-        assert height == pytest.approx(np.ptp(wall[:, 2]), abs=0.3)
+        assert height == pytest.approx(wall[:, 2].max(), abs=0.3)  # ground is z = 0 here
         # Plan C6 pedestrian prior: footprint 0.3 to 1.2 m, so C6 can FAIL this on size.
         assert width < 0.05 and length > 1.2 and height > 1.5
 
@@ -181,7 +183,7 @@ def test_sloped_ground_local_plane_removes_ground_and_keeps_object():
         ground_kept = crosser_kept = crosser_total = 0
         for i in (0, 10, 20):
             ids, sweep, pts = _raw_ids(s, track, i)
-            keep, used = remove_ground(pts, SweepContext(sweep, cfg.ground), cfg)
+            keep, used, _ = remove_ground(pts, SweepContext(sweep, cfg.ground), cfg)
             assert used == mode
             ground_kept += int(((ids == GROUND) & keep).sum())
             crosser_kept += int(((ids == CROSSER) & keep).sum())
@@ -191,6 +193,9 @@ def test_sloped_ground_local_plane_removes_ground_and_keeps_object():
     assert kept["global"][0] > 0
     [a] = associate(s, [(track, "pedestrian")])
     assert len(a.track.samples) == s.cfg.n_frames and min(_purity(s, a, CROSSER)) == 1.0
+    # Height is measured from the sloped ground under the object, not from z = 0.
+    heights = [x.extent_lwh[2] for x in a.track.samples]
+    assert max(abs(h - s.cfg.crosser_lwh[2]) for h in heights) < 0.15
 
 
 def test_ground_plane_is_not_a_roof():

@@ -62,6 +62,7 @@ class FrameCluster:
     point_index: np.ndarray  # rows of the sweep's points
     coverage: int
     ground: Literal["local", "global", "none"]
+    plane: "Plane | None"  # the ground plane used, for measuring height
 
 
 @dataclass(eq=False)
@@ -157,8 +158,10 @@ class SweepContext:
         return self._global
 
 
-def remove_ground(points: np.ndarray, ctx: SweepContext, cfg: AssociationConfig) -> tuple[np.ndarray, str]:
-    """Mask of points at least ground_height_m above the ground, and which plane was used."""
+def remove_ground(
+    points: np.ndarray, ctx: SweepContext, cfg: AssociationConfig
+) -> tuple[np.ndarray, str, Plane | None]:
+    """Mask of points at least ground_height_m above the ground, which plane was used, and the plane."""
     g = cfg.ground
     plane, mode = None, "none"
     if g.mode == "local":
@@ -171,8 +174,8 @@ def remove_ground(points: np.ndarray, ctx: SweepContext, cfg: AssociationConfig)
         plane = ctx.global_plane()
         mode = "global" if plane is not None else "none"
     if plane is None:
-        return np.ones(len(points), dtype=bool), mode
-    return plane.height(points) >= cfg.ground_height_m, mode
+        return np.ones(len(points), dtype=bool), mode, None
+    return plane.height(points) >= cfg.ground_height_m, mode, plane
 
 
 # One frame
@@ -264,7 +267,7 @@ def _frame(
     idx, depth, pix = proj.index[sel], proj.depth[sel], pixels[sel]
     if len(idx) == 0:
         return skip("no_points", coverage)
-    above, ground = remove_ground(ctx.xyz[idx], ctx, cfg)
+    above, ground, plane = remove_ground(ctx.xyz[idx], ctx, cfg)
     idx, depth, pix = idx[above], depth[above], pix[above]
     seen = visible_in_camera(pix, depth, cfg)
     idx, depth = idx[seen], depth[seen]
@@ -284,16 +287,27 @@ def _frame(
         point_index=np.sort(idx[labels == largest]),
         coverage=coverage,
         ground=ground,
+        plane=plane,
     )
 
 
 # Samples
 
 
-def _sample(scene: Scene, points: np.ndarray, ts: float, coverage: int) -> Sample3D:
+def _height(points: np.ndarray, centre: np.ndarray, plane: Plane | None) -> float:
+    """Top of the cluster minus the ground height under its footprint (the z range when there is no plane)."""
+    # ASSUMPTION A-53: height = top z minus the A-49 plane's z at the median x, y (largest cluster's plane)
+    if plane is None or abs(plane.normal[2]) < 1e-9:
+        return float(np.ptp(points[:, 2]))
+    n = plane.normal
+    ground_z = -(n[0] * centre[0] + n[1] * centre[1] + plane.d) / n[2]
+    return float(points[:, 2].max() - ground_z)
+
+
+def _sample(scene: Scene, points: np.ndarray, ts: float, coverage: int, plane: Plane | None) -> Sample3D:
     world = np.median(points, axis=0)
     ego = np.median(world_to_ego(scene.ego_pose(ts), points), axis=0)
-    # ASSUMPTION A-53: length and width by PCA over world x, y (world z is up, A-26); height is the z range
+    # ASSUMPTION A-53: length and width by PCA over world x, y (world z is up, A-26); height from the ground
     xy = points[:, :2] - points[:, :2].mean(axis=0)
     if len(points) >= 2 and np.ptp(xy, axis=0).any():
         axes = np.linalg.eigh(np.cov(xy.T))[1]
@@ -305,7 +319,7 @@ def _sample(scene: Scene, points: np.ndarray, ts: float, coverage: int) -> Sampl
         xyz_ego=tuple(float(v) for v in ego),
         xyz_world=tuple(float(v) for v in world),
         n_points=len(points),
-        extent_lwh=(float(spans.max()), float(spans.min()), float(np.ptp(points[:, 2]))),
+        extent_lwh=(float(spans.max()), float(spans.min()), _height(points, world, plane)),
         coverage=coverage,
     )
 
@@ -446,7 +460,14 @@ def associate(
     out = []
     for n, g in enumerate(groups + empty):
         samples = [
-            _sample(scene, pts.at(g.clusters[t]), t, max(c.coverage for c in g.clusters[t])) for t in g.times
+            _sample(
+                scene,
+                pts.at(g.clusters[t]),
+                t,
+                max(c.coverage for c in g.clusters[t]),
+                max(g.clusters[t], key=lambda c: len(c.point_index)).plane,
+            )
+            for t in g.times
         ]
         track3d = Track3D(
             track_id=f"{scene.scene_id}/{g.cls}/{n}",
