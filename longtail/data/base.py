@@ -83,6 +83,10 @@ class Scene(ABC):
     def extrinsics(self, camera: str, ts: float) -> np.ndarray:
         """world_from_camera at a camera timestamp."""
 
+    @abstractmethod
+    def image_size(self, camera: str) -> tuple[int, int]:
+        """(width, height) in pixels."""
+
     def labels(self, frame_idx: int) -> Any:
         """3D cuboid labels for one frame. Ground truth: only inside eval_ground_truth()."""
         require_label_access("cuboid labels")
