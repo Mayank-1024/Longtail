@@ -184,6 +184,10 @@ def test_close_pass_car_reads_stopped():
     s = SyntheticScene(close_pass_config())
     f = _verify(s, track_source(s, {"car": ["pass_car"]}), [CAR], [("stopped", ["c1"], {})])
     assert f.verified
+    # ASSUMPTION A-94: the PASS run is 0.6 s, but every verdict in it was judged on a full 1 s window of clean
+    # steps (the series' last second, shared by the frames near its end)
+    a, b = f.results[0].evidence["example"]["judged_window"]
+    assert b - a == pytest.approx(1.0) and f.t1 - f.t0 < 1.0
     r = _one(s, track_source(s, {"car": ["pass_car"]}), [CAR], "moving", ["c1"])
     assert r.status != "PASS" and r.evidence["frame_status"]["PASS"] == 0
 

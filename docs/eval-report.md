@@ -118,4 +118,6 @@ All on the synthetic scene. Every predicate has a PASS, a FAIL and an UNVERIFIAB
 | Close-pass car: stopped | PASS for 0.6 s (back camera's track) | | |
 | Close-pass car: moving | FAIL (`not_moving`) | 0 / 6 / 34 | implausible_jump 19, not_observed 15, not_moving 6 |
 
+Why "stopped" PASSes on a 0.6 s run (A-94): every frame is judged on a full 1 s window of clean steps, centred on the frame but kept inside the speed series. For the back camera's track (2.2 to 3.9 s), any window touching the position jump at 2.6 to 2.8 s is UNVERIFIABLE, so only the frames from 3.4 s on have a clean window, and near the series' end they all share the last second, 2.9 to 3.9 s (net speed 0.006 m/s, every step below 0.3 m/s). The 0.6 s is the run of PASS frames, which needs only min_duration_s (0.5 s); the evidence behind it is the full 1 s, and each verdict's window is in its evidence (`judged_window`).
+
 Neither car ever PASSes moving. The implausible-jump rule is what stops the C5 spikes from becoming "moving", but most of their frames end up UNVERIFIABLE rather than stopped: the "stopped" verdict rests on 0.6 s of evidence. That is honest, and it is thin; better positions for speed (C5) would turn those frames into evidence.

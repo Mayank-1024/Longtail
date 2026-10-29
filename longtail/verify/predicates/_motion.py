@@ -37,6 +37,7 @@ class Step:
     state: State | None
     net_mps: float | None
     reason: Reason | None  # set when the step cannot be judged
+    window: tuple[float, float] | None = None  # the timestamps the verdict was judged on
 
 
 def jumps(series: Series, cfg: MotionConfig) -> np.ndarray:
@@ -70,7 +71,9 @@ def steps(series: Series, cfg: MotionConfig) -> list[Step]:
             if not series.reliable[k]:
                 out[k] = Step(None, None, Reason.UNRELIABLE_SPEED)
                 continue
-            # The window_s window centred on this step, shifted to stay inside the series.
+            # ASSUMPTION A-94: each step is judged on a full window_s of clean steps, centred on it but
+            # shifted to stay inside its series, so steps near a series end share one window; the finding's
+            # run of such steps need only reach min_duration_s
             start = min(max(t[j] - cfg.window_s / 2, t[0]), t[-1] - cfg.window_s)
             a = int(np.searchsorted(t, start - 1e-6))
             b = int(np.searchsorted(t, start + cfg.window_s + 1e-6)) - 1
@@ -86,7 +89,7 @@ def steps(series: Series, cfg: MotionConfig) -> list[Step]:
                 state = "moving"
             elif net < cfg.stopped_mps:
                 state = "stopped"
-            out[k] = Step(state, net, None)
+            out[k] = Step(state, net, None, (float(t[a]), float(t[b])))
     return out
 
 
@@ -106,7 +109,7 @@ def frames(ctx: Context, series: Series, want: State, obj: TrackedObject | None)
         if s.state is None:
             out.append(FrameResult.unverifiable(s.reason))
             continue
-        detail = {"net_speed_mps": round(s.net_mps, 3), "state": s.state}
+        detail = {"net_speed_mps": round(s.net_mps, 3), "state": s.state, "judged_window": list(s.window)}
         if want == "moving":
             ok = s.state == "moving"
             margin = s.net_mps - (cfg.stopped_mps if ok else cfg.moving_mps)
