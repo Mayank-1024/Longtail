@@ -43,3 +43,11 @@ Height (A-53) is now the cluster's top minus the local plane's height under the 
 ### Fragment merging by extrapolation (A-56)
 
 The plan merges tracks whose centroids stay within 1.0 m over at least half of their shared timestamps. Two fragments of one camera's track never share timestamps, so that rule cannot apply to them. The earlier fragment's centroid is extrapolated at constant velocity (fitted over its last 1 s) to the later fragment's first sweep; they merge when within 1.0 m and the gap is at most 1.0 s. A crosser track split into frames 0 to 11 and 16 to 29 merges back into one track; fragments of different objects stay apart.
+
+### Cross-camera merging on shared LiDAR points (A-74)
+
+Found while testing C5. A 4.5 m car passed 2.0 m away is seen in parts by the front, front-right and right cameras; the parts' centroids are more than 1 m apart, so the plan's rule left them as separate tracks, none covering the whole car. Clusters from adjacent cameras now also merge when they share LiDAR points at a timestamp: at least 5, and at least 30% of the smaller cluster.
+
+The 30% floor matters. Two cars parked nose to tail 0.3 m apart, where one car's mask spills slightly onto the other, share about 4% of the smaller cluster; on shared points alone (5 or more) the two cars merged into one track, with the floor they stay apart (`test_cars_parked_nose_to_tail_stay_apart`).
+
+The floor also has a cost on the close pass: the front and front-right views of the passed car share only 21% to 28% of the smaller cluster (the cameras overlap by about 5 degrees in the synthetic rig), so those two no longer merge; front-right and right (50% to 100%) still do.

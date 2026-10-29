@@ -394,6 +394,18 @@ def _chain_fragments(groups: list[_Group], pts: _Points, m: MergeConfig) -> list
     return chains
 
 
+def _rows(group: _Group, t: float) -> np.ndarray:
+    return np.unique(np.concatenate([c.point_index for c in group.clusters[t]]))
+
+
+def _shares_points(a: _Group, b: _Group, t: float, m: MergeConfig) -> bool:
+    """Clusters that share enough LiDAR points are one object, even with centroids far apart."""
+    # ASSUMPTION A-74: at least min_shared_points and min_shared_points_frac of the smaller cluster
+    ra, rb = _rows(a, t), _rows(b, t)
+    common = len(np.intersect1d(ra, rb))
+    return common >= m.min_shared_points and common >= m.min_shared_points_frac * min(len(ra), len(rb))
+
+
 def _merge_cameras(groups: list[_Group], pts: _Points, m: MergeConfig) -> list[_Group]:
     """Merge one object's tracks from adjacent cameras (plan C4 step 6)."""
     candidates = []
@@ -408,8 +420,10 @@ def _merge_cameras(groups: list[_Group], pts: _Points, m: MergeConfig) -> list[_
             if not shared:
                 continue
             dists = np.array([np.linalg.norm(pts.centroid(a, t) - pts.centroid(b, t)) for t in shared])
-            if np.mean(dists <= m.max_centroid_dist_m) >= m.min_shared_frac:
-                candidates.append((float(np.median(dists)), i, j))
+            # ASSUMPTION A-74: long objects split by the cameras' fields of view merge on shared points
+            same = (dists <= m.max_centroid_dist_m) | np.array([_shares_points(a, b, t, m) for t in shared])
+            if np.mean(same) >= m.min_shared_frac:
+                candidates.append((float(np.median(np.where(same, dists, np.inf))), i, j))
     # ASSUMPTION A-55: greedy by median distance; never two simultaneous tracks of one camera in a group
     parent = list(range(len(groups)))
 

@@ -22,8 +22,15 @@ import numpy as np
 from longtail.data.base import CameraFrame, LidarSweep, Scene, SceneMeta, index_of
 from longtail.geometry.transforms import apply, make_pose, rot_z
 
-GROUND, WALL, CROSSER, PARKED, PED_A, PED_B = 0, 1, 2, 3, 4, 5
-OBJECT_IDS = {"crosser": CROSSER, "parked": PARKED, "ped_a": PED_A, "ped_b": PED_B}
+GROUND, WALL, CROSSER, PARKED, PED_A, PED_B, CAR_A, CAR_B = 0, 1, 2, 3, 4, 5, 7, 8
+OBJECT_IDS = {
+    "crosser": CROSSER,
+    "parked": PARKED,
+    "ped_a": PED_A,
+    "ped_b": PED_B,
+    "car_a": CAR_A,
+    "car_b": CAR_B,
+}
 
 # ASSUMPTION A-44: synthetic rig of six pinhole cameras with PandaSet names, yawed about the ego up axis
 CAMERA_YAWS_DEG = {
@@ -76,6 +83,11 @@ class SyntheticConfig:
     pair_center: tuple[float, float] = (12.0, 3.0)
     pair_gap_m: float = 0.6
     pair_lwh: tuple[float, float, float] = (0.5, 0.5, 1.75)
+    # ASSUMPTION A-75: optional two cars parked nose to tail across the road, nose_to_tail_gap_m apart
+    nose_to_tail: bool = False
+    nose_to_tail_center: tuple[float, float] = (4.0, 4.0)
+    nose_to_tail_gap_m: float = 0.3
+    nose_to_tail_lwh: tuple[float, float, float] = (4.5, 1.8, 1.5)
 
 
 @dataclass(frozen=True)
@@ -177,6 +189,15 @@ class SyntheticScene(Scene):
                 velocity_world=np.zeros(3),
             ),
         }
+        if c.nose_to_tail:
+            ahead, left = c.nose_to_tail_center
+            for name, offset in (("car_a", 0.0), ("car_b", c.nose_to_tail_lwh[0] + c.nose_to_tail_gap_m)):
+                objs[name] = SyntheticObject(
+                    center_world=self._on_ground(ahead, left + offset, c.nose_to_tail_lwh[2] / 2),
+                    lwh=c.nose_to_tail_lwh,
+                    yaw=c.ego_yaw_rad + np.pi / 2,
+                    velocity_world=np.zeros(3),
+                )
         if c.pedestrian_pair:
             ahead, left = c.pair_center
             for name, side in (("ped_a", -0.5), ("ped_b", 0.5)):

@@ -33,6 +33,8 @@ class GroundConfig(_Strict):
 class MergeConfig(_Strict):
     max_centroid_dist_m: float = Field(gt=0)
     min_shared_frac: float = Field(gt=0, le=1)
+    min_shared_points: int = Field(ge=1)
+    min_shared_points_frac: float = Field(ge=0, le=1)
     fragment_max_gap_s: float = Field(ge=0)
     fragment_velocity_window_s: float = Field(gt=0)
 

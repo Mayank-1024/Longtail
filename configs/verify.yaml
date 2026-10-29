@@ -45,6 +45,10 @@ association:
     # Plan C4 step 6: same class, adjacent cameras, within this distance over this share of shared timestamps.
     max_centroid_dist_m: 1.0
     min_shared_frac: 0.5
+    # ASSUMPTION A-74: or when their clusters share at least this many LiDAR points at that timestamp, making
+    # up at least this share of the smaller cluster (a mask spilling onto a neighbour shares only a few)
+    min_shared_points: 5
+    min_shared_points_frac: 0.3
     # ASSUMPTION A-56: same-camera fragments: extrapolate over gaps up to this long, velocity from this window
     fragment_max_gap_s: 1.0
     fragment_velocity_window_s: 1.0

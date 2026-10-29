@@ -37,8 +37,13 @@ CFG = load_verify_config().association
 
 def _cfg(**update) -> AssociationConfig:
     ground = update.pop("ground", None)
+    merge = update.pop("merge", None)
     cfg = CFG.model_copy(update=update)
-    return cfg if ground is None else cfg.model_copy(update={"ground": CFG.ground.model_copy(update=ground)})
+    if ground is not None:
+        cfg = cfg.model_copy(update={"ground": CFG.ground.model_copy(update=ground)})
+    if merge is not None:
+        cfg = cfg.model_copy(update={"merge": CFG.merge.model_copy(update=merge)})
+    return cfg
 
 
 @pytest.fixture(scope="module")
@@ -258,6 +263,19 @@ def test_crosser_entering_a_second_camera_merges():
     assert merged.track.sources == [("front_camera", 4), ("front_left_camera", 9)]
     assert len(merged.track.samples) == s.cfg.n_frames
     assert min(_purity(s, merged, CROSSER)) == 1.0
+
+
+def test_cars_parked_nose_to_tail_stay_apart():
+    # ASSUMPTION A-74: a few shared points from a mask spilling onto the neighbour are not enough to merge
+    # ASSUMPTION A-75: cars nose to tail; front-left sees car_a (mask spills onto car_b), left sees car_b
+    s = SyntheticScene(SyntheticConfig(nose_to_tail=True, n_frames=8, ego_speed_mps=0.0, wall_left_m=14.0))
+    a = object_track2d(s, "car_a", "front_left_camera", concept="car", obj_id=1, dilate_px=8)
+    b = object_track2d(s, "car_b", "left_camera", concept="car", obj_id=2)
+    tracks = [(a, "car"), (b, "car")]
+    loose = _cfg(merge={"min_shared_points_frac": 0.0})
+    assert len(associate(s, tracks, loose)) == 1  # points alone would wrongly join the two cars
+    apart = associate(s, tracks)
+    assert sorted(r.track.sources for r in apart) == [[("front_left_camera", 1)], [("left_camera", 2)]]
 
 
 def test_different_classes_or_far_tracks_do_not_merge():
