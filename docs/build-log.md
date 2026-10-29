@@ -5,3 +5,4 @@ Everything in this repository was created during the Meta Global AI Developer Ha
 | Date | Who | What |
 |---|---|---|
 | 2026-10-28 | Mayank | Created the repository: licence, CI (ruff, pytest, gitleaks), package layout by owner, PR and issue templates, build log. |
+| 2026-10-29 | Chethan | Draft `contracts.py` (plan section 4 plus tagged assumptions) with validation and a computed `Finding.verified`; assumptions register and a test that keeps tags and register in sync; pinned Python 3.11. Contracts await Mayank. |
