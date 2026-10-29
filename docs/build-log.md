@@ -6,3 +6,4 @@ Everything in this repository was created during the Meta Global AI Developer Ha
 |---|---|---|
 | 2026-10-28 | Mayank | Created the repository: licence, CI (ruff, pytest, gitleaks), package layout by owner, PR and issue templates, build log. |
 | 2026-10-29 | Chethan | Draft `contracts.py` (plan section 4 plus tagged assumptions) with validation and a computed `Finding.verified`; assumptions register and a test that keeps tags and register in sync; pinned Python 3.11. Contracts await Mayank. |
+| 2026-10-29 | Chethan | C1 adapter on the PandaSet devkit (pinned 59be180): Scene API, label guard over cuboids and semseg, download and index scripts, `longtail scenes ls`; ego axes derived from the devkit static calibration (A-25). Tested on a fake on-disk sequence; dataset not downloaded yet, so real-data checks skip. |

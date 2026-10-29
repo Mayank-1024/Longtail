@@ -54,7 +54,7 @@ def _tags() -> tuple[dict[str, set[str]], list[str]]:
             ids = TAG.findall(line)
             for aid in ids:
                 used[aid].add(path)
-            if LOOSE_TAG.search(line) and not ids:
+            if len(LOOSE_TAG.findall(line)) != len(ids):
                 malformed.append(f"{path}:{n}: {line.strip()}")
     return used, malformed
 
