@@ -74,10 +74,64 @@ class EgoPathConfig(_Strict):
     min_length_m: float = Field(ge=0)
 
 
+class SizePrior(_Strict):
+    height_m: tuple[float, float]
+    footprint_m: tuple[float, float]
+    typical_height_m: float = Field(gt=0)
+
+
+class ExistsConfig(_Strict):
+    min_points: int = Field(ge=1)
+    min_points_far: int = Field(ge=1)
+    far_m: float = Field(gt=0)
+    max_range_m: float = Field(gt=0)
+    size_priors: dict[str, SizePrior]
+
+
+class WithinDistanceConfig(_Strict):
+    tolerance_m: float = Field(ge=0)
+
+
+class MotionConfig(_Strict):
+    moving_mps: float = Field(gt=0)
+    stopped_mps: float = Field(ge=0)
+    window_s: float = Field(gt=0)
+    max_accel_mps2: float = Field(gt=0)
+
+
+class CrossingConfig(_Strict):
+    max_ahead_m: float = Field(gt=0)
+    min_lateral_mps: float = Field(ge=0)
+
+
+class RelativePositionConfig(_Strict):
+    window_s: float = Field(gt=0)
+    min_frac: float = Field(gt=0, le=1)
+
+
+class OccludedByConfig(_Strict):
+    min_cover_frac: float = Field(gt=0, le=1)
+
+
+class PredicatesConfig(_Strict):
+    exists: ExistsConfig
+    within_distance: WithinDistanceConfig
+    motion: MotionConfig
+    crossing: CrossingConfig
+    relative_position: RelativePositionConfig
+    occluded_by: OccludedByConfig
+
+
+class EngineConfig(_Strict):
+    max_bindings: int = Field(ge=1)
+
+
 class VerifyConfig(_Strict):
     association: AssociationConfig
     tracks: TracksConfig
     ego_path: EgoPathConfig
+    predicates: PredicatesConfig
+    engine: EngineConfig
 
 
 @cache

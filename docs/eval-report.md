@@ -87,3 +87,35 @@ Tried and dropped: registering each frame's points onto the previous frame's (tr
 ### Ego path
 
 The corridor follows the ego's actual future path for 3 s, half-width 1.5 m, checked against the analytic arc for a turning ego. A stopped or slow ego gets at least 10 m straight ahead (A-69), so a pedestrian crossing in front of a car waiting at a light is still in its path.
+
+## C6: verifier predicates and engine
+
+All on the synthetic scene. Every predicate has a PASS, a FAIL and an UNVERIFIABLE test with readable evidence (`tests/test_verify.py`): a reason code (A-79), the frames, per-status and per-reason counts, an example frame with its numbers, the threshold, the predicate's own longest PASS run, the binding search, and a margin whenever there is a value.
+
+### Where the plan's predicates did not work as written
+
+- **exists.** The plan gives a size prior only for pedestrians; priors for every class were added (A-76), with loose lower bounds because a cluster is only the visible surfaces (a car seen from behind measures 1.9 x 0.9 m). Height uses C4's ground-based measure (A-53). A frame where coverage was fine but nothing survived ground removal and clustering FAILs (`no_object_points`) rather than UNVERIFIABLE. The wall-only cluster FAILs on size (`wrong_size`: 2.75 m long against the pedestrian's 1.2 m); empty space is UNVERIFIABLE (`no_coverage`).
+- **The 50 ms sync rule rarely fires at 10 Hz.** With sweeps every 100 ms, every camera frame is within 50 ms of some sweep, so `unsynced` can only happen at a log's ends or beside a dropped sweep. The reason code is tested with a 5 Hz LiDAR and a 70 ms camera offset.
+- **within_distance.** Uses the range of C4's median, which sits on the near face, about 0.3 m nearer than the object's centre for a pedestrian (C4 above). The plan's 0.5 m tolerance absorbs it.
+- **moving / stopped.** Judged by net displacement over 1 s (as asked) with the plan's hysteresis. The plan says nothing about where the hysteresis starts (A-80) or about position jumps; jumps faster than 10 m/s^2 are now UNVERIFIABLE (`implausible_jump`, A-77). That limit catches the C5 spikes, but it also shows how often they occur: see the occluded parked car below.
+- **crossing_ego_path.** A FAIL ("stays outside") needs the full 3 s look-ahead, so in the last 3 s of any track the predicate can only PASS or be UNVERIFIABLE (`track_too_short`); on PandaSet's 8 s scenes that is the last 3 s of every scene. An actor already inside the corridor and moving across it now PASSes (A-81). With the ego stopped, the 10 m minimum corridor (A-69) lets a pedestrian crossing 8 m ahead PASS.
+- **relative_position.** "At least half of the window" is judged in a 1 s window around each frame (A-78), so it can combine with the other predicates frame by frame; sides are half-planes (A-82).
+- **near.** No tolerance in the plan; none added. It measures between C4 medians, so each actor's near-face bias applies (A-83).
+- **occluded_by.** The amodal box as specified (the visible box extended down to the ground and up to the class height, A-07) never sees an object hidden at its side: the visible box simply ends where the occluder begins, so in the synthetic scene the parked car partly behind the crosser read 0% covered in every frame. The box now also includes the C5 box fit, which knows the car's track-wide size (4.2 x 1.7 m measured, 4.5 x 1.8 m true), projected from the ground to the typical height (A-93). With it the parked car PASSes (30%, 22%, 22% covered) while the crosser is in front of it, and FAILs once the crosser has moved on. Coverage uses bounding boxes (A-84), which overstates it for occluders that are not box-shaped.
+
+### Engine
+
+- Findings: one per window, the best binding (plan). The plan's "best-scoring" picked, among unverified bindings, the one with the least evidence: UNVERIFIABLE (-0.5) outscores FAIL (-1), so a candidate the sensors barely saw beat the track that clearly showed the claim false. Unverified bindings now rank first by the number of frames judged PASS or FAIL (A-85).
+- Joint timing: verified needs one run of frames where every required predicate PASSes together for min_duration_s (A-91). Without such a run each predicate is summarised over the whole window, and its own longest PASS run is reported, so "it did cross, but not while the ego was moving" stays readable.
+- One finding per window means a window with two true matches (two pedestrians crossing) reports only the better one; the plan's design, noted here as a limit.
+
+### The occluded parked car and the close pass (from C5)
+
+| Claim | Result | Frames: PASS / FAIL / UNVERIFIABLE | Reasons |
+|---|---|---|---|
+| Occluded parked car: moving | FAIL (`not_moving`) | 0 / 6 / 34 | implausible_jump 33, not_moving 6, not_observed 1 |
+| Occluded parked car: stopped | PASS for 0.6 s | | |
+| Close-pass car: stopped | PASS for 0.6 s (back camera's track) | | |
+| Close-pass car: moving | FAIL (`not_moving`) | 0 / 6 / 34 | implausible_jump 19, not_observed 15, not_moving 6 |
+
+Neither car ever PASSes moving. The implausible-jump rule is what stops the C5 spikes from becoming "moving", but most of their frames end up UNVERIFIABLE rather than stopped: the "stopped" verdict rests on 0.6 s of evidence. That is honest, and it is thin; better positions for speed (C5) would turn those frames into evidence.

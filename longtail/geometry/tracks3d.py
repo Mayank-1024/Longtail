@@ -48,6 +48,7 @@ class TrackedObject:
     association: Association
     track: Track3D
     motion: Motion
+    box: "BoxFit | None" = None  # the box fit behind the positions, when position is "box_centre"
 
 
 # Positions
@@ -135,7 +136,25 @@ def _view(
     return _View(clean=clean, margin_m=margin)
 
 
+@dataclass(frozen=True, eq=False)
+class BoxFit:
+    """Per-sample L-shape box: centre (NaN where it cannot be placed), yaw of axis 0, and track-wide size."""
+
+    ts: np.ndarray
+    centres: np.ndarray  # (N, 3) world
+    yaws: np.ndarray  # (N,) radians; axis 0 points along yaw, axis 1 along yaw + 90 degrees
+    size: np.ndarray  # (2,) metres along axis 0 and axis 1
+
+    def at(self, ts: float) -> int | None:
+        hit = np.flatnonzero(np.abs(self.ts - ts) < 1e-6)
+        return int(hit[0]) if len(hit) else None
+
+
 def box_centres(scene: Scene, assoc: Association, cfg: TracksConfig) -> np.ndarray:
+    return box_fit(scene, assoc, cfg).centres
+
+
+def box_fit(scene: Scene, assoc: Association, cfg: TracksConfig) -> BoxFit:
     """Per-sample centre of an L-shape box fit; rows are NaN where the centre cannot be observed.
 
     Along each box axis: when the sensor is clearly outside the cluster's extent, the face toward it is
@@ -177,13 +196,14 @@ def box_centres(scene: Scene, assoc: Association, cfg: TracksConfig) -> np.ndarr
             elif view.clean[k, 1]:
                 centre[k] = hi[k] - size[k] / 2
         centres.append([*(_rot2(y) @ centre), s.xyz_world[2]])
-    return np.array(centres)
+    return BoxFit(np.array([s.ts for s in samples]), np.array(centres), np.array(yaws), size)
 
 
-def _positions(scene: Scene, assoc: Association, cfg: TracksConfig) -> np.ndarray:
+def _positions(scene: Scene, assoc: Association, cfg: TracksConfig) -> tuple[np.ndarray, BoxFit | None]:
     if cfg.position == "box_centre":
-        return box_centres(scene, assoc, cfg)
-    return np.array([s.xyz_world for s in assoc.track.samples])
+        fit = box_fit(scene, assoc, cfg)
+        return fit.centres, fit
+    return np.array([s.xyz_world for s in assoc.track.samples]), None
 
 
 # Motion
@@ -201,7 +221,7 @@ def track_motion(scene: Scene, assoc: Association, cfg: TracksConfig | None = No
         return TrackedObject(assoc, assoc.track.model_copy(update={"speed_mps": []}), motion)
 
     obs_ts = np.array([s.ts for s in samples])
-    obs_pos = _positions(scene, assoc, cfg)
+    obs_pos, fit = _positions(scene, assoc, cfg)
     # ASSUMPTION A-73: a sample whose centre cannot be observed is treated like a missing sample
     known = ~np.isnan(obs_pos).any(axis=1)
     if not known.any():
@@ -240,7 +260,7 @@ def track_motion(scene: Scene, assoc: Association, cfg: TracksConfig | None = No
         reliable=np.concatenate([np.full(len(p[0]), p[7]) for p in parts]),
     )
     speeds = [float(motion.speed_mps[motion.index(s.ts)]) if _has(motion, s.ts) else 0.0 for s in samples]
-    return TrackedObject(assoc, assoc.track.model_copy(update={"speed_mps": speeds}), motion)
+    return TrackedObject(assoc, assoc.track.model_copy(update={"speed_mps": speeds}), motion, fit)
 
 
 def _has(motion: Motion, ts: float) -> bool:
