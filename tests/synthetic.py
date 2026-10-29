@@ -22,7 +22,8 @@ import numpy as np
 from longtail.data.base import CameraFrame, LidarSweep, Scene, SceneMeta, index_of
 from longtail.geometry.transforms import apply, make_pose, rot_z
 
-GROUND, WALL, CROSSER, PARKED = 0, 1, 2, 3
+GROUND, WALL, CROSSER, PARKED, PED_A, PED_B = 0, 1, 2, 3, 4, 5
+OBJECT_IDS = {"crosser": CROSSER, "parked": PARKED, "ped_a": PED_A, "ped_b": PED_B}
 
 # ASSUMPTION A-44: synthetic rig of six pinhole cameras with PandaSet names, yawed about the ego up axis
 CAMERA_YAWS_DEG = {
@@ -67,6 +68,14 @@ class SyntheticConfig:
     box_spacing_m: float = 0.1
     # ASSUMPTION A-43: LiDAR sees only box faces turned toward it, and boxes occlude points behind them
     occlusion: bool = True
+    # ASSUMPTION A-60: optional slope: flat to slope_start_m ahead, then a constant grade; boxes upright
+    ground_grade: float = 0.0
+    slope_start_m: float = 8.0
+    # ASSUMPTION A-61: optional pair of standing pedestrians, centres pair_gap_m apart across the ego's path
+    pedestrian_pair: bool = False
+    pair_center: tuple[float, float] = (12.0, 3.0)
+    pair_gap_m: float = 0.6
+    pair_lwh: tuple[float, float, float] = (0.5, 0.5, 1.75)
 
 
 @dataclass(frozen=True)
@@ -141,14 +150,20 @@ class SyntheticScene(Scene):
         c = self.cfg
         return make_pose(rot_z(c.ego_yaw_rad), self._start + self._fwd * c.ego_speed_mps * (t - c.t0))
 
+    def ground_z(self, ahead: np.ndarray | float) -> np.ndarray | float:
+        """Ground height at a distance ahead of the ego's start position."""
+        c = self.cfg
+        return c.ground_grade * np.maximum(0.0, np.asarray(ahead) - c.slope_start_m)
+
     def _on_ground(self, ahead: float, left: float, height: float) -> np.ndarray:
         """World point given ego-at-t0 ground coordinates and a height above the ground."""
-        return np.array([*(self._start[:2] + ahead * self._fwd[:2] + left * self._left[:2]), height])
+        xy = self._start[:2] + ahead * self._fwd[:2] + left * self._left[:2]
+        return np.array([*xy, float(self.ground_z(ahead)) + height])
 
     def objects(self, t: float) -> dict[str, SyntheticObject]:
         c = self.cfg
         crosser_left = c.crosser_start[1] + c.crosser_speed_mps * (t - c.t0)
-        return {
+        objs = {
             "crosser": SyntheticObject(
                 center_world=self._on_ground(c.crosser_start[0], crosser_left, c.crosser_lwh[2] / 2),
                 lwh=c.crosser_lwh,
@@ -162,9 +177,19 @@ class SyntheticScene(Scene):
                 velocity_world=np.zeros(3),
             ),
         }
+        if c.pedestrian_pair:
+            ahead, left = c.pair_center
+            for name, side in (("ped_a", -0.5), ("ped_b", 0.5)):
+                objs[name] = SyntheticObject(
+                    center_world=self._on_ground(ahead, left + side * c.pair_gap_m, c.pair_lwh[2] / 2),
+                    lwh=c.pair_lwh,
+                    yaw=c.ego_yaw_rad,
+                    velocity_world=np.zeros(3),
+                )
+        return objs
 
     def point_ids(self, ts: float) -> np.ndarray:
-        """Which object each point of lidar(ts) came from: GROUND, WALL, CROSSER or PARKED."""
+        """Which object each point of lidar(ts) came from: GROUND, WALL or an OBJECT_IDS value."""
         return self._sweep(index_of(self._lidar_ts, ts, "LiDAR sweep"))[1]
 
     # Scene API
@@ -255,7 +280,7 @@ class SyntheticScene(Scene):
         ground = np.column_stack(
             [
                 self._start[:2] + np.outer(g[:, 0], self._fwd[:2]) + np.outer(g[:, 1], self._left[:2]),
-                np.zeros(len(g)),
+                self.ground_z(g[:, 0]),
             ]
         )
         wa = _grid(
@@ -265,7 +290,7 @@ class SyntheticScene(Scene):
         wall = np.column_stack(
             [
                 self._start[:2] + np.outer(wa[:, 0], self._fwd[:2]) + c.wall_left_m * self._left[:2],
-                wa[:, 1],
+                self.ground_z(wa[:, 0]) + wa[:, 1],
             ]
         )
         ids = np.concatenate([np.full(len(ground), GROUND), np.full(len(wall), WALL)])
@@ -277,15 +302,15 @@ class SyntheticScene(Scene):
         sensor = self.ego_pose_at(t)[:3, 3]
         objs = self.objects(t)
         parts = [self._static]
-        for oid, name in ((CROSSER, "crosser"), (PARKED, "parked")):
-            pts = _box_surface(objs[name], self.cfg.box_spacing_m, sensor, self.cfg.occlusion)
-            parts.append((pts, np.full(len(pts), oid)))
+        for name, obj in objs.items():
+            pts = _box_surface(obj, self.cfg.box_spacing_m, sensor, self.cfg.occlusion)
+            parts.append((pts, np.full(len(pts), OBJECT_IDS[name])))
         xyz = np.concatenate([p for p, _ in parts])
         ids = np.concatenate([d for _, d in parts])
         if self.cfg.occlusion:
             keep = np.ones(len(xyz), dtype=bool)
-            for oid, name in ((CROSSER, "crosser"), (PARKED, "parked")):
-                keep &= (ids == oid) | ~_occluded_by(objs[name], sensor, xyz)
+            for name, obj in objs.items():
+                keep &= (ids == OBJECT_IDS[name]) | ~_occluded_by(obj, sensor, xyz)
             xyz, ids = xyz[keep], ids[keep]
         return xyz, ids
 
@@ -297,3 +322,148 @@ def world_to_pixel(scene: SyntheticScene, camera: str, frame_idx: int, point_wor
     p = apply(np.linalg.inv(world_from_cam), point_world[None])[0]
     k = scene.intrinsics(camera)
     return np.array([k[0, 0] * p[0] / p[2] + k[0, 2], k[1, 1] * p[1] / p[2] + k[1, 2]])
+
+
+# Track2D helpers: stand-ins for SAM 3.1 output on the synthetic scene.
+# ASSUMPTION A-62: synthetic masks are the convex hull of the projected box minus nearer objects' hulls
+
+
+def _cross2(a: np.ndarray, b: np.ndarray) -> np.ndarray:
+    return a[..., 0] * b[..., 1] - a[..., 1] * b[..., 0]
+
+
+def _convex_hull(pts: np.ndarray) -> np.ndarray:
+    """Counter-clockwise hull (monotone chain) of (N, 2) points."""
+    pts = np.unique(pts, axis=0)
+    if len(pts) < 3:
+        return pts
+
+    def half(points):
+        out: list[np.ndarray] = []
+        for p in points:
+            while len(out) >= 2 and _cross2(out[-1] - out[-2], p - out[-2]) <= 0:
+                out.pop()
+            out.append(p)
+        return out[:-1]
+
+    return np.array(half(pts) + half(pts[::-1]))
+
+
+def _fill_convex(hull: np.ndarray, size: tuple[int, int]) -> np.ndarray:
+    """Pixels whose centre (integer coordinates, A-37) lies inside the hull."""
+    w, h = size
+    mask = np.zeros((h, w), dtype=bool)
+    lo = np.clip(np.floor(hull.min(axis=0)).astype(int), 0, [w - 1, h - 1])
+    hi = np.clip(np.ceil(hull.max(axis=0)).astype(int), 0, [w - 1, h - 1])
+    if (
+        hull.max(axis=0)[0] < 0
+        or hull.max(axis=0)[1] < 0
+        or hull.min(axis=0)[0] > w - 1
+        or hull.min(axis=0)[1] > h - 1
+    ):
+        return mask
+    us, vs = np.meshgrid(np.arange(lo[0], hi[0] + 1), np.arange(lo[1], hi[1] + 1))
+    p = np.stack([us.ravel(), vs.ravel()], axis=1).astype(float)
+    inside = np.ones(len(p), dtype=bool)
+    for a, b in zip(hull, np.roll(hull, -1, axis=0), strict=True):
+        inside &= _cross2(b - a, p - a) >= 0
+    mask[p[inside, 1].astype(int), p[inside, 0].astype(int)] = True
+    return mask
+
+
+def _silhouette(scene: SyntheticScene, obj: SyntheticObject, camera: str, t: float):
+    """(mask, centre distance) of a box in a camera at time t; None if part of it is behind the camera."""
+    from longtail.geometry.project import MIN_DEPTH_M
+    from longtail.geometry.transforms import world_to_camera
+
+    signs = np.array([[sx, sy, sz] for sx in (-1, 1) for sy in (-1, 1) for sz in (-1, 1)], dtype=float)
+    corners = obj.center_world + (signs * np.array(obj.lwh) / 2) @ rot_z(obj.yaw).T
+    cam_pose = scene.ego_pose_at(t) @ scene.ego_from_camera(camera)
+    cam = world_to_camera(cam_pose, corners)
+    if np.any(cam[:, 2] <= MIN_DEPTH_M):
+        return None
+    k = scene.intrinsics(camera)
+    uv = np.column_stack(
+        [k[0, 0] * cam[:, 0] / cam[:, 2] + k[0, 2], k[1, 1] * cam[:, 1] / cam[:, 2] + k[1, 2]]
+    )
+    # Order overlapping objects by straight-line distance; camera z ties for objects side by side.
+    distance = float(np.linalg.norm(world_to_camera(cam_pose, obj.center_world[None])[0]))
+    return _fill_convex(_convex_hull(uv), scene.image_size(camera)), distance
+
+
+def disk(radius: int) -> np.ndarray:
+    r = np.arange(-radius, radius + 1)
+    return (r[:, None] ** 2 + r[None, :] ** 2) <= radius**2
+
+
+def object_mask(scene: SyntheticScene, name: str, camera: str, frame_idx: int, dilate_px: int = 0):
+    """Visible mask of one object in one camera frame; None unless it is wholly in front of the camera."""
+    from scipy.ndimage import binary_dilation
+
+    t = scene.frames(camera)[frame_idx].ts
+    objs = scene.objects(t)
+    own = _silhouette(scene, objs[name], camera, t)
+    if own is None:
+        return None
+    mask, distance = own
+    for other, obj in objs.items():
+        s = None if other == name else _silhouette(scene, obj, camera, t)
+        if s is not None and s[1] < distance:
+            mask &= ~s[0]
+    if dilate_px:
+        mask = binary_dilation(mask, structure=disk(dilate_px))
+    return mask if mask.any() else None
+
+
+def rect_mask(scene: SyntheticScene, u0: int, v0: int, u1: int, v1: int) -> np.ndarray:
+    """Inclusive pixel rectangle as a mask."""
+    w, h = scene.cfg.image_size
+    mask = np.zeros((h, w), dtype=bool)
+    mask[v0 : v1 + 1, u0 : u1 + 1] = True
+    return mask
+
+
+def track2d_from_masks(scene, camera: str, concept: str, obj_id: int, masks: dict, truncated: bool = False):
+    from longtail.contracts import Frame2D, Track2D
+    from longtail.vision.rle import encode
+
+    frames = []
+    for i, m in sorted(masks.items()):
+        if m is None or not m.any():
+            continue
+        vs, us = np.nonzero(m)
+        box = (float(us.min()), float(vs.min()), float(us.max()), float(vs.max()))
+        frames.append(
+            Frame2D(frame_idx=i, ts=scene.frames(camera)[i].ts, box_xyxy=box, mask_rle=encode(m), conf=0.9)
+        )
+    return Track2D(
+        scene_id=scene.scene_id,
+        camera=camera,
+        concept=concept,
+        obj_id=obj_id,
+        truncated=truncated,
+        frames=frames,
+    )
+
+
+def object_track2d(
+    scene: SyntheticScene,
+    name: str,
+    camera: str,
+    concept: str = "person",
+    obj_id: int = 1,
+    frames=None,
+    dilate_px: int = 0,
+    truncated: bool = False,
+):
+    """Track2D of one object in one camera; frames where it is not visible are left out."""
+    idx = range(scene.cfg.n_frames) if frames is None else frames
+    masks = {i: object_mask(scene, name, camera, i, dilate_px) for i in idx}
+    return track2d_from_masks(scene, camera, concept, obj_id, masks, truncated)
+
+
+def without_masks(track):
+    """The same track as boxes only, like a VLM claim (plan C4 step 8)."""
+    return track.model_copy(
+        update={"frames": [f.model_copy(update={"mask_rle": None}) for f in track.frames]}
+    )
