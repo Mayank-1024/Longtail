@@ -51,3 +51,39 @@ Found while testing C5. A 4.5 m car passed 2.0 m away is seen in parts by the fr
 The floor matters. Two cars parked nose to tail 0.3 m apart, where one car's mask spills slightly onto the other, share 2.3% of the smaller cluster; on shared points alone (5 or more) the two cars merged into one track, with the floor they stay apart (`test_cars_parked_nose_to_tail_stay_apart`).
 
 The floor was first 30%. That split the close-pass car: its front and front-right views share only 21% to 28% of the smaller cluster (the synthetic cameras overlap by about 5 degrees). At 15% those views merge again, and the nose-to-tail cars, at 2.3%, still stay apart.
+
+## C5: 3D tracks and the ego path
+
+Synthetic scene, Savitzky-Golay window 5 (plan), quadratic fit (A-66). "Run" is the longest continuous time above 0.5 m/s, which is what C6's `moving` predicate needs for 1 s; a parked object must never get a run of 1 s or more.
+
+### The median drifts with the visible part; the box centre mostly does not (A-68)
+
+| Object | Median position: median / max speed, longest run | Box centre (A-68): median / max speed, longest run |
+|---|---|---|
+| Crosser, 1.5 m/s (front camera) | 1.49 / range 0.96 to 1.54 m/s | 1.50 / range 1.11 to 1.94 m/s |
+| Parked car, ego at 2 m/s, crosser passes in front of it | 0.29 / 3.61 m/s, 0.7 s | 0.00 / 0.45 m/s, 0 s |
+| Close-pass car, ego at 5 m/s: front, front-right and right merged (A-74) | 1.29 / 4.82 m/s, 1.6 s | 0.04 / 5.31 m/s, 0.3 s |
+| Close-pass car: back camera | 1.30 / 2.60 m/s, 1.2 s | 0.02 / 5.08 m/s, 0.6 s |
+| Parked car partly hidden by the close-pass car | 1.37 / 5.12 m/s, 2.1 s | 0.91 / 20.78 m/s, 1.2 s |
+
+With the median, C6 would call the close-pass car moving (runs of 1.6 s and 1.2 s). With the box centre no run reaches 1 s (at most 0.6 s), so C6 reads it parked.
+
+Why the median fails: LiDAR sees only the faces toward the sensor, and each camera sees only the part of an object inside its field of view, so the cluster's median follows whichever part is visible. As the ego passes a long car, that part slides along the car at the ego's speed.
+
+Why a plain box fit is not enough: the first L-shape box centre (nearest edge plus half the track-wide size) still read 2 to 7 m/s on the close pass. It needed three refinements, all in A-68 and A-73:
+
+1. Erosion shaves a few centimetres off a face seen head-on but up to 0.3 m off a side face seen at a grazing angle, so the face toward the sensor (whose plane does not move) anchors the centre, and only when the sensor is outside the cluster's extent by more than the erosion margin.
+2. An end cut by the image border or an occluder is not a real boundary; such ends are detected per camera (with distances scaled to the cluster's point spacing in pixels: the synthetic car's points are about 25 px apart at 2 m) and never used as anchors.
+3. Long objects need the cross-camera merge on shared points (A-74), or no track ever sees both ends.
+
+Tried and dropped: registering each frame's points onto the previous frame's (translation-only ICP). It read the occluded parked car as exactly 0 m/s, but a flat face sliding along itself fits equally well at any in-plane shift, so it misread the crosser (0.6 m/s) and the close pass (up to 5.3 m/s).
+
+### Still failing
+
+- The crosser's speed is right as a track (median 1.50 m/s) but swings from 1.11 to 1.94 m/s step to step, as its visible faces change. The plan's "1.5 plus or minus 0.1" holds for the track's median, not for every step; C6's 1 s duration rule absorbs the swings.
+- A parked car partly hidden by the close-pass car still reads as moving for 1.2 s (`test_occluded_parked_car_during_close_pass`, a strict expected failure). Occlusion by a nearer object that itself slides across the view is not caught by the end tests.
+- A 1 s smoothing window (11) trims the spikes (close pass 1.87 m/s max, the occluded car 0.8 s) but was not adopted: the plan fixes 5, and the change belongs with C6 tuning on development queries.
+
+### Ego path
+
+The corridor follows the ego's actual future path for 3 s, half-width 1.5 m, checked against the analytic arc for a turning ego. A stopped or slow ego gets at least 10 m straight ahead (A-69), so a pedestrian crossing in front of a car waiting at a light is still in its path.

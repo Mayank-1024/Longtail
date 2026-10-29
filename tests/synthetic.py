@@ -22,12 +22,13 @@ import numpy as np
 from longtail.data.base import CameraFrame, LidarSweep, Scene, SceneMeta, index_of
 from longtail.geometry.transforms import apply, make_pose, rot_z
 
-GROUND, WALL, CROSSER, PARKED, PED_A, PED_B, CAR_A, CAR_B = 0, 1, 2, 3, 4, 5, 7, 8
+GROUND, WALL, CROSSER, PARKED, PED_A, PED_B, PASS_CAR, CAR_A, CAR_B = 0, 1, 2, 3, 4, 5, 6, 7, 8
 OBJECT_IDS = {
     "crosser": CROSSER,
     "parked": PARKED,
     "ped_a": PED_A,
     "ped_b": PED_B,
+    "pass_car": PASS_CAR,
     "car_a": CAR_A,
     "car_b": CAR_B,
 }
@@ -55,6 +56,8 @@ class SyntheticConfig:
     ego_start_world: tuple[float, float] = (100.0, 50.0)
     ego_yaw_rad: float = 0.25
     ego_speed_mps: float = 2.0
+    # ASSUMPTION A-64: optional constant yaw rate, so the ego can drive an arc (corridor tests)
+    ego_yaw_rate_rps: float = 0.0
     sensor_height_m: float = 1.8
     # Cameras sit at the ego origin, this far below the LiDAR.
     camera_drop_m: float = 0.3
@@ -83,6 +86,10 @@ class SyntheticConfig:
     pair_center: tuple[float, float] = (12.0, 3.0)
     pair_gap_m: float = 0.6
     pair_lwh: tuple[float, float, float] = (0.5, 0.5, 1.75)
+    # ASSUMPTION A-65: optional car-sized parked object close to the ego's path, for the close-pass test
+    pass_car: bool = False
+    pass_car_center: tuple[float, float] = (8.0, -2.9)
+    pass_car_lwh: tuple[float, float, float] = (4.5, 1.8, 1.5)
     # ASSUMPTION A-75: optional two cars parked nose to tail across the road, nose_to_tail_gap_m apart
     nose_to_tail: bool = False
     nose_to_tail_center: tuple[float, float] = (4.0, 4.0)
@@ -160,7 +167,15 @@ class SyntheticScene(Scene):
     def ego_pose_at(self, t: float) -> np.ndarray:
         """world_from_ego at any time."""
         c = self.cfg
-        return make_pose(rot_z(c.ego_yaw_rad), self._start + self._fwd * c.ego_speed_mps * (t - c.t0))
+        dt, w = t - c.t0, c.ego_yaw_rate_rps
+        heading = c.ego_yaw_rad + w * dt
+        if w == 0:
+            offset = self._fwd * c.ego_speed_mps * dt
+        else:
+            r = c.ego_speed_mps / w
+            h0 = c.ego_yaw_rad
+            offset = np.array([r * (np.sin(heading) - np.sin(h0)), -r * (np.cos(heading) - np.cos(h0)), 0.0])
+        return make_pose(rot_z(heading), self._start + offset)
 
     def ground_z(self, ahead: np.ndarray | float) -> np.ndarray | float:
         """Ground height at a distance ahead of the ego's start position."""
@@ -189,6 +204,13 @@ class SyntheticScene(Scene):
                 velocity_world=np.zeros(3),
             ),
         }
+        if c.pass_car:
+            objs["pass_car"] = SyntheticObject(
+                center_world=self._on_ground(*c.pass_car_center, c.pass_car_lwh[2] / 2),
+                lwh=c.pass_car_lwh,
+                yaw=c.ego_yaw_rad,
+                velocity_world=np.zeros(3),
+            )
         if c.nose_to_tail:
             ahead, left = c.nose_to_tail_center
             for name, offset in (("car_a", 0.0), ("car_b", c.nose_to_tail_lwh[0] + c.nose_to_tail_gap_m)):
@@ -488,3 +510,17 @@ def without_masks(track):
     return track.model_copy(
         update={"frames": [f.model_copy(update={"mask_rle": None}) for f in track.frames]}
     )
+
+
+def close_pass_config(**overrides) -> SyntheticConfig:
+    """The ego drives at 5 m/s fully past a 4.5 m parked car whose near side is 2.0 m from its path.
+
+    The crosser starts 30 m ahead so the ego never drives through it.
+    """
+    base = dict(pass_car=True, ego_speed_mps=5.0, n_frames=40, crosser_start=(30.0, -2.25))
+    return SyntheticConfig(**{**base, **overrides})
+
+
+def stopped_ego_config(**overrides) -> SyntheticConfig:
+    """The ego stands still (a red light); everything else as the default scene."""
+    return SyntheticConfig(**{"ego_speed_mps": 0.0, **overrides})

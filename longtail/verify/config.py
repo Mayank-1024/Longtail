@@ -54,8 +54,30 @@ class AssociationConfig(_Strict):
     merge: MergeConfig
 
 
+class TracksConfig(_Strict):
+    savgol_window: int = Field(ge=3)
+    savgol_polyorder: int = Field(ge=0)
+    max_interp_gap_s: float = Field(ge=0)
+    position: Literal["median", "box_centre"]
+    lshape_angle_step_deg: float = Field(gt=0, le=45)
+    lshape_min_distance_m: float = Field(gt=0)
+    edge_band_m: float = Field(gt=0)
+    truncation_border_px: int = Field(ge=0)
+    occluder_radius_px: float = Field(gt=0)
+    occluder_margin_m: float = Field(ge=0)
+    spacing_factor: float = Field(ge=0)
+
+
+class EgoPathConfig(_Strict):
+    horizon_s: float = Field(gt=0)
+    half_width_m: float = Field(gt=0)
+    min_length_m: float = Field(ge=0)
+
+
 class VerifyConfig(_Strict):
     association: AssociationConfig
+    tracks: TracksConfig
+    ego_path: EgoPathConfig
 
 
 @cache
