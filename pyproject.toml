@@ -29,3 +29,5 @@ select = ["E", "F", "I", "B", "UP"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# Import the package from the checkout even when the editable-install .pth file is skipped.
+pythonpath = ["."]
