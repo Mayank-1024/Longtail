@@ -11,7 +11,7 @@ Everything below is tested on a synthetic scene only (`tests/synthetic.py`); Pan
 | Contracts (joint, M1) | Merged (merge commit) | `c/contracts-and-assumptions` | [#1](https://github.com/Mayank-1024/longtail/pull/1) | Validation, computed `verified`, assumption-tag test | none |
 | C1 Dataset adapter | Merged (merge commit) | `c/c1-adapter` | [#2](https://github.com/Mayank-1024/longtail/pull/2) | Fake on-disk PandaSet sequence read through the real devkit; label guard; download script; scene-index selection | Build `index.json` (30 scenes + 3 phrase-tuning); one scene loads in under 5 s; ego axes, world up and camera poses against the devkit calibration |
 | C2 Projection and sync | Done | `c/c2-projection` | [#3](https://github.com/Mayank-1024/longtail/pull/3) | Projection, transforms, sync, gap report | Projection within 1 px of the devkit; overlays for six cameras by eye (Oct 30 gate); real gap distribution |
-| C3 SAM 3.1 client | Offline parts done (draft) | `c/c3-sam` | C3_PR_LINK | Clips (H.264, round trip, crops, cache); parser on a SYNTHETIC fixture via meta-sam-parser; client with a fake transport (retries, file-id reuse, ledger, replay); SAM tracks into verify() end to end | Smoke test with a Meta key (`scripts/sam_smoke.py`), replacing the SYNTHETIC fixture with a recorded one; concept-phrase test on 3 scenes; move onto `llm/client.py` when it exists |
+| C3 SAM 3.1 client | Offline parts done (draft) | `c/c3-sam` | [#9](https://github.com/Mayank-1024/longtail/pull/9) | Clips (H.264, round trip, crops, cache); parser on a SYNTHETIC fixture via meta-sam-parser; client with a fake transport (retries, file-id reuse, ledger, replay); SAM tracks into verify() end to end | Smoke test with a Meta key (`scripts/sam_smoke.py`), replacing the SYNTHETIC fixture with a recorded one; concept-phrase test on 3 scenes; move onto `llm/client.py` when it exists |
 | C4 Mask to LiDAR | Done | `c/c4-association` | [#4](https://github.com/Mayank-1024/longtail/pull/4) | Clusters, ground (incl. slopes), visibility filter, merging, frustum and box-only | 17 of 20 real SAM masks correct by eye (needs C3) |
 | C5 Tracks and ego path | Done | `c/c5-tracks` | [#5](https://github.com/Mayank-1024/longtail/pull/5) | Speeds, gaps, ego motion cancelling, corridor (straight, arc, stopped) | Parked car on a real scene under 0.3 m/s; corridor on the bird's-eye export |
 | C6 Verifier | Done | `c/c6-verifier` | [#6](https://github.com/Mayank-1024/longtail/pull/6) | PASS, FAIL and UNVERIFIABLE for all 10 predicates; binding, pruning, cap | Thresholds on PandaSet and tuning on development queries |
@@ -83,6 +83,15 @@ One finding per window that has frames: the best binding, verified or not. Raise
 ```python
 def my_source(scene, camera, concept):
     return sam_tracks_for(scene.scene_id, camera, concept)  # Track2D list from SAM 3.1
+```
+
+The real one (C3, `longtail/vision/track_source.py`), once there is a key:
+
+```python
+from longtail.vision.sam_client import SamClient, transport_from_env
+from longtail.vision.track_source import sam_track_source
+source = sam_track_source(SamClient(transport_from_env()))  # replay=True or LONGTAIL_REPLAY=1: cache only
+findings = verify(spec, windows, scene, track_source=source)
 ```
 
 **Reason codes** (A-79, `longtail/verify/predicates/base.py`, `Reason`): PASS is `ok`. UNVERIFIABLE: `no_coverage`, `out_of_range`, `unsynced`, `truncated`, `not_observed`, `track_too_short`, `unreliable_speed`, `implausible_jump`, `requires_exists`. FAIL: `wrong_size`, `too_few_points`, `no_object_points`, `too_far`, `not_moving`, `not_stopped`, `outside_corridor`, `not_toward_corridor`, `wrong_side`, `not_near`, `not_occluded`, `shorter_than_min_duration`.
