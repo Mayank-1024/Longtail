@@ -76,6 +76,8 @@ class Association:
     truncated: bool
     # Points behind each sample, by sample ts, for merging and the C9 overlays.
     clusters: dict[float, list[FrameCluster]] = field(repr=False)
+    # ASSUMPTION A-97: the Track2Ds merged into this track, so C9 can draw their masks and boxes
+    inputs: list[Track2D] = field(default_factory=list, repr=False)
 
 
 # Ground
@@ -334,6 +336,7 @@ class _Group:
     clusters: dict[float, list[FrameCluster]]
     skipped: list[FrameSkip]
     truncated: bool
+    inputs: list[Track2D] = field(default_factory=list)
 
     @property
     def times(self) -> list[float]:
@@ -352,6 +355,7 @@ class _Group:
             self.clusters.setdefault(t, []).extend(cs)
         self.skipped += other.skipped
         self.truncated |= other.truncated
+        self.inputs += other.inputs
 
 
 class _Points:
@@ -466,7 +470,7 @@ def associate(
             else:
                 clusters[out.ts].append(out)
         # ASSUMPTION A-57: Track3D.cls is the taxonomy class the caller pairs with each Track2D
-        group = _Group(cls, [(track.camera, track.obj_id)], dict(clusters), skipped, track.truncated)
+        group = _Group(cls, [(track.camera, track.obj_id)], dict(clusters), skipped, track.truncated, [track])
         (groups if clusters else empty).append(group)
     pts = _Points(sweeps)
     groups = _merge_cameras(_chain_fragments(groups, pts, cfg.merge), pts, cfg.merge)
@@ -491,5 +495,9 @@ def associate(
             # ASSUMPTION A-48: C4 leaves speed_mps empty; C5 fills it
             speed_mps=[],
         )
-        out.append(Association(track=track3d, skipped=g.skipped, truncated=g.truncated, clusters=g.clusters))
+        out.append(
+            Association(
+                track=track3d, skipped=g.skipped, truncated=g.truncated, clusters=g.clusters, inputs=g.inputs
+            )
+        )
     return out

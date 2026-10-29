@@ -112,3 +112,16 @@ def test_eval_ground_truth_used_only_in_eval_code():
         if _calls(p, "eval_ground_truth") and not (rel := str(p.relative_to(ROOT))).startswith(allowed)
     ]
     assert not offenders, f"eval_ground_truth() used outside evaluation code: {offenders}"
+
+
+def test_viz_never_reads_labels():
+    # C9 builds overlays and bird's-eye views from the verification run only (labels are ground truth)
+    names = ("labels", "semseg", "_labels", "_semseg", "eval_ground_truth", "load_cuboids", "load_semseg")
+    offenders = [
+        f"{p.relative_to(ROOT)}:{n} {name}"
+        for p in _py_files("longtail/viz")
+        for name in names
+        for n in _calls(p, name)
+    ]
+    assert _py_files("longtail/viz"), "longtail/viz is missing"
+    assert not offenders, f"label reads in C9: {offenders}"

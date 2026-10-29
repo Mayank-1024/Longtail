@@ -10,9 +10,9 @@ REGISTER = "docs/assumptions.md"
 # Files that talk about tags rather than carry them.
 NOT_SCANNED = {REGISTER, "tests/test_assumptions.py"}
 
-TAG = re.compile(r"#\s*ASSUMPTION\s+(A-\d{2}):\s+\S")
+TAG = re.compile(r"#\s*ASSUMPTION\s+(A-\d{2,3}):\s+\S")
 LOOSE_TAG = re.compile(r"ASSUMPTION\s*A-?\d")
-ROW = re.compile(r"^\|\s*(A-\d{2})\s*\|(.*)\|\s*(C|M|both)\s*\|\s*(ASSUMED|CONFIRMED)\s*\|(.*)\|\s*$")
+ROW = re.compile(r"^\|\s*(A-\d{2,3})\s*\|(.*)\|\s*(C|M|both)\s*\|\s*(ASSUMED|CONFIRMED)\s*\|(.*)\|\s*$")
 
 
 def _repo_files() -> list[str]:
@@ -61,7 +61,7 @@ def _tags() -> tuple[dict[str, set[str]], list[str]]:
 
 def test_tags_are_well_formed():
     _, malformed = _tags()
-    assert not malformed, "tags must read '# ASSUMPTION A-NN: text':\n" + "\n".join(malformed)
+    assert not malformed, "tags must read '# ASSUMPTION A-NN: text' (2 or 3 digits):\n" + "\n".join(malformed)
 
 
 def test_every_tag_is_registered():

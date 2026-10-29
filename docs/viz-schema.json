@@ -1,0 +1,675 @@
+{
+ "$defs": {
+  "BevBox": {
+   "additionalProperties": false,
+   "description": "C5 box fit (A-68) in the ego frame.",
+   "properties": {
+    "center_xy": {
+     "description": "Box centre, ego frame, metres",
+     "items": {
+      "type": "number"
+     },
+     "maxItems": 2,
+     "minItems": 2,
+     "title": "Center Xy",
+     "type": "array"
+    },
+    "yaw_rad": {
+     "description": "Direction of the box's length axis, ego frame, radians, counter-clockwise from +x",
+     "title": "Yaw Rad",
+     "type": "number"
+    },
+    "length_m": {
+     "description": "Extent along yaw_rad (the track-wide size; not always the longer side)",
+     "title": "Length M",
+     "type": "number"
+    },
+    "width_m": {
+     "description": "Extent perpendicular to yaw_rad",
+     "title": "Width M",
+     "type": "number"
+    }
+   },
+   "required": [
+    "center_xy",
+    "yaw_rad",
+    "length_m",
+    "width_m"
+   ],
+   "title": "BevBox",
+   "type": "object"
+  },
+  "BevDecimation": {
+   "additionalProperties": false,
+   "properties": {
+    "max_range_m": {
+     "description": "Points beyond this horizontal range are dropped",
+     "title": "Max Range M",
+     "type": "number"
+    },
+    "voxel_m": {
+     "description": "One point kept per voxel of this size",
+     "title": "Voxel M",
+     "type": "number"
+    },
+    "max_points_per_frame": {
+     "description": "Cap after the voxel grid, from the size budget",
+     "title": "Max Points Per Frame",
+     "type": "integer"
+    },
+    "budget_bytes": {
+     "description": "Size budget for this file",
+     "title": "Budget Bytes",
+     "type": "integer"
+    }
+   },
+   "required": [
+    "max_range_m",
+    "voxel_m",
+    "max_points_per_frame",
+    "budget_bytes"
+   ],
+   "title": "BevDecimation",
+   "type": "object"
+  },
+  "BevExport": {
+   "additionalProperties": false,
+   "properties": {
+    "schema_version": {
+     "const": "1.0",
+     "title": "Schema Version",
+     "type": "string"
+    },
+    "finding_id": {
+     "title": "Finding Id",
+     "type": "string"
+    },
+    "scene_id": {
+     "title": "Scene Id",
+     "type": "string"
+    },
+    "frame": {
+     "const": "ego",
+     "description": "Every coordinate is in the ego frame of its own frame_idx",
+     "title": "Frame",
+     "type": "string"
+    },
+    "decimation": {
+     "$ref": "#/$defs/BevDecimation"
+    },
+    "frames": {
+     "items": {
+      "$ref": "#/$defs/BevFrame"
+     },
+     "title": "Frames",
+     "type": "array"
+    }
+   },
+   "required": [
+    "schema_version",
+    "finding_id",
+    "scene_id",
+    "frame",
+    "decimation",
+    "frames"
+   ],
+   "title": "BevExport",
+   "type": "object"
+  },
+  "BevFrame": {
+   "additionalProperties": false,
+   "properties": {
+    "frame_idx": {
+     "description": "LiDAR sweep index in the scene",
+     "title": "Frame Idx",
+     "type": "integer"
+    },
+    "ts": {
+     "description": "Sweep timestamp, seconds",
+     "title": "Ts",
+     "type": "number"
+    },
+    "points_xyz": {
+     "description": "Decimated LiDAR points, ego frame, metres (centimetre precision)",
+     "items": {
+      "items": {
+       "type": "number"
+      },
+      "maxItems": 3,
+      "minItems": 3,
+      "type": "array"
+     },
+     "title": "Points Xyz",
+     "type": "array"
+    },
+    "ego_box": {
+     "description": "Ego vehicle footprint polygon, ego frame (A-100)",
+     "items": {
+      "items": {
+       "type": "number"
+      },
+      "maxItems": 2,
+      "minItems": 2,
+      "type": "array"
+     },
+     "title": "Ego Box",
+     "type": "array"
+    },
+    "corridor": {
+     "description": "Ego corridor polygon (C5), ego frame; closed implicitly",
+     "items": {
+      "items": {
+       "type": "number"
+      },
+      "maxItems": 2,
+      "minItems": 2,
+      "type": "array"
+     },
+     "title": "Corridor",
+     "type": "array"
+    },
+    "corridor_centerline": {
+     "description": "The ego's future path, ego frame, starting at the origin",
+     "items": {
+      "items": {
+       "type": "number"
+      },
+      "maxItems": 2,
+      "minItems": 2,
+      "type": "array"
+     },
+     "title": "Corridor Centerline",
+     "type": "array"
+    },
+    "corridor_extended": {
+     "description": "True when the path was extended to the minimum length (A-69)",
+     "title": "Corridor Extended",
+     "type": "boolean"
+    },
+    "tracks": {
+     "items": {
+      "$ref": "#/$defs/BevTrack"
+     },
+     "title": "Tracks",
+     "type": "array"
+    }
+   },
+   "required": [
+    "frame_idx",
+    "ts",
+    "points_xyz",
+    "ego_box",
+    "corridor",
+    "corridor_centerline",
+    "corridor_extended",
+    "tracks"
+   ],
+   "title": "BevFrame",
+   "type": "object"
+  },
+  "BevTrack": {
+   "additionalProperties": false,
+   "properties": {
+    "track_id": {
+     "title": "Track Id",
+     "type": "string"
+    },
+    "cls": {
+     "description": "Taxonomy class",
+     "title": "Cls",
+     "type": "string"
+    },
+    "actors": {
+     "description": "Spec actor ids bound to this track in the finding",
+     "items": {
+      "type": "string"
+     },
+     "title": "Actors",
+     "type": "array"
+    },
+    "position_xyz": {
+     "anyOf": [
+      {
+       "items": {
+        "type": "number"
+       },
+       "maxItems": 3,
+       "minItems": 3,
+       "type": "array"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "description": "C4 median of the cluster, ego frame, metres; null if unobserved",
+     "title": "Position Xyz"
+    },
+    "box": {
+     "anyOf": [
+      {
+       "$ref": "#/$defs/BevBox"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "description": "Box fit, or null where it could not be placed"
+    },
+    "speed_mps": {
+     "anyOf": [
+      {
+       "type": "number"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "description": "Horizontal speed over ground (C5), m/s; null if no motion step",
+     "title": "Speed Mps"
+    },
+    "velocity_xy_mps": {
+     "anyOf": [
+      {
+       "items": {
+        "type": "number"
+       },
+       "maxItems": 2,
+       "minItems": 2,
+       "type": "array"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "description": "World velocity in ego axes (A-70), m/s",
+     "title": "Velocity Xy Mps"
+    },
+    "speed_reliable": {
+     "description": "False when the speed series was too short to smooth (A-71)",
+     "title": "Speed Reliable",
+     "type": "boolean"
+    }
+   },
+   "required": [
+    "track_id",
+    "cls",
+    "actors",
+    "position_xyz",
+    "box",
+    "speed_mps",
+    "velocity_xy_mps",
+    "speed_reliable"
+   ],
+   "title": "BevTrack",
+   "type": "object"
+  },
+  "FindingAssets": {
+   "additionalProperties": false,
+   "properties": {
+    "finding_id": {
+     "title": "Finding Id",
+     "type": "string"
+    },
+    "window_id": {
+     "title": "Window Id",
+     "type": "string"
+    },
+    "verified": {
+     "title": "Verified",
+     "type": "boolean"
+    },
+    "score": {
+     "title": "Score",
+     "type": "number"
+    },
+    "t0": {
+     "title": "T0",
+     "type": "number"
+    },
+    "t1": {
+     "title": "T1",
+     "type": "number"
+    },
+    "bindings": {
+     "additionalProperties": {
+      "type": "string"
+     },
+     "title": "Bindings",
+     "type": "object"
+    },
+    "overlays": {
+     "items": {
+      "$ref": "#/$defs/OverlayAsset"
+     },
+     "title": "Overlays",
+     "type": "array"
+    },
+    "missing_overlays": {
+     "items": {
+      "$ref": "#/$defs/MissingOverlay"
+     },
+     "title": "Missing Overlays",
+     "type": "array"
+    },
+    "bev_path": {
+     "title": "Bev Path",
+     "type": "string"
+    },
+    "bev_bytes": {
+     "title": "Bev Bytes",
+     "type": "integer"
+    },
+    "timeline_path": {
+     "title": "Timeline Path",
+     "type": "string"
+    },
+    "export_seconds": {
+     "title": "Export Seconds",
+     "type": "number"
+    }
+   },
+   "required": [
+    "finding_id",
+    "window_id",
+    "verified",
+    "score",
+    "t0",
+    "t1",
+    "bindings",
+    "overlays",
+    "missing_overlays",
+    "bev_path",
+    "bev_bytes",
+    "timeline_path",
+    "export_seconds"
+   ],
+   "title": "FindingAssets",
+   "type": "object"
+  },
+  "MissingOverlay": {
+   "additionalProperties": false,
+   "properties": {
+    "camera": {
+     "title": "Camera",
+     "type": "string"
+    },
+    "frame_idx": {
+     "title": "Frame Idx",
+     "type": "integer"
+    },
+    "reason": {
+     "description": "Why there is no overlay, e.g. no camera frame synced to this sweep",
+     "title": "Reason",
+     "type": "string"
+    }
+   },
+   "required": [
+    "camera",
+    "frame_idx",
+    "reason"
+   ],
+   "title": "MissingOverlay",
+   "type": "object"
+  },
+  "OverlayAsset": {
+   "additionalProperties": false,
+   "properties": {
+    "camera": {
+     "title": "Camera",
+     "type": "string"
+    },
+    "frame_idx": {
+     "description": "LiDAR sweep index",
+     "title": "Frame Idx",
+     "type": "integer"
+    },
+    "camera_frame_idx": {
+     "description": "The camera frame drawn, matched to the sweep by C2 sync",
+     "title": "Camera Frame Idx",
+     "type": "integer"
+    },
+    "ts": {
+     "description": "Camera frame timestamp, seconds",
+     "title": "Ts",
+     "type": "number"
+    },
+    "path": {
+     "description": "JPEG path relative to the manifest's directory",
+     "title": "Path",
+     "type": "string"
+    }
+   },
+   "required": [
+    "camera",
+    "frame_idx",
+    "camera_frame_idx",
+    "ts",
+    "path"
+   ],
+   "title": "OverlayAsset",
+   "type": "object"
+  },
+  "Timeline": {
+   "additionalProperties": false,
+   "properties": {
+    "schema_version": {
+     "const": "1.0",
+     "title": "Schema Version",
+     "type": "string"
+    },
+    "finding_id": {
+     "title": "Finding Id",
+     "type": "string"
+    },
+    "verified": {
+     "title": "Verified",
+     "type": "boolean"
+    },
+    "t0": {
+     "title": "T0",
+     "type": "number"
+    },
+    "t1": {
+     "title": "T1",
+     "type": "number"
+    },
+    "frames": {
+     "description": "Every frame of the candidate window, in order",
+     "items": {
+      "$ref": "#/$defs/TimelineFrame"
+     },
+     "title": "Frames",
+     "type": "array"
+    },
+    "predicates": {
+     "items": {
+      "$ref": "#/$defs/TimelinePredicate"
+     },
+     "title": "Predicates",
+     "type": "array"
+    }
+   },
+   "required": [
+    "schema_version",
+    "finding_id",
+    "verified",
+    "t0",
+    "t1",
+    "frames",
+    "predicates"
+   ],
+   "title": "Timeline",
+   "type": "object"
+  },
+  "TimelineEntry": {
+   "additionalProperties": false,
+   "properties": {
+    "frame_idx": {
+     "title": "Frame Idx",
+     "type": "integer"
+    },
+    "ts": {
+     "title": "Ts",
+     "type": "number"
+    },
+    "status": {
+     "description": "The predicate's verdict at this frame; NOT_JUDGED if the engine did not evaluate it",
+     "enum": [
+      "PASS",
+      "FAIL",
+      "UNVERIFIABLE",
+      "NOT_JUDGED"
+     ],
+     "title": "Status",
+     "type": "string"
+    },
+    "reason": {
+     "anyOf": [
+      {
+       "type": "string"
+      },
+      {
+       "type": "null"
+      }
+     ],
+     "description": "Reason code (A-79); null when NOT_JUDGED",
+     "title": "Reason"
+    }
+   },
+   "required": [
+    "frame_idx",
+    "ts",
+    "status",
+    "reason"
+   ],
+   "title": "TimelineEntry",
+   "type": "object"
+  },
+  "TimelineFrame": {
+   "additionalProperties": false,
+   "properties": {
+    "frame_idx": {
+     "title": "Frame Idx",
+     "type": "integer"
+    },
+    "ts": {
+     "title": "Ts",
+     "type": "number"
+    },
+    "in_interval": {
+     "description": "Inside the finding's [t0, t1], the frames that have overlays",
+     "title": "In Interval",
+     "type": "boolean"
+    }
+   },
+   "required": [
+    "frame_idx",
+    "ts",
+    "in_interval"
+   ],
+   "title": "TimelineFrame",
+   "type": "object"
+  },
+  "TimelinePredicate": {
+   "additionalProperties": false,
+   "properties": {
+    "result_id": {
+     "description": "PredicateResult.result_id in the finding",
+     "title": "Result Id",
+     "type": "string"
+    },
+    "name": {
+     "title": "Name",
+     "type": "string"
+    },
+    "actors": {
+     "additionalProperties": {
+      "type": "string"
+     },
+     "description": "Actor id to track id",
+     "title": "Actors",
+     "type": "object"
+    },
+    "required": {
+     "title": "Required",
+     "type": "boolean"
+    },
+    "status": {
+     "description": "The predicate's summary status in the finding",
+     "enum": [
+      "PASS",
+      "FAIL",
+      "UNVERIFIABLE"
+     ],
+     "title": "Status",
+     "type": "string"
+    },
+    "reason": {
+     "description": "The summary's reason code",
+     "title": "Reason",
+     "type": "string"
+    },
+    "entries": {
+     "description": "One per timeline frame, in frame order",
+     "items": {
+      "$ref": "#/$defs/TimelineEntry"
+     },
+     "title": "Entries",
+     "type": "array"
+    }
+   },
+   "required": [
+    "result_id",
+    "name",
+    "actors",
+    "required",
+    "status",
+    "reason",
+    "entries"
+   ],
+   "title": "TimelinePredicate",
+   "type": "object"
+  },
+  "VizManifest": {
+   "additionalProperties": false,
+   "properties": {
+    "schema_version": {
+     "const": "1.0",
+     "title": "Schema Version",
+     "type": "string"
+    },
+    "run_id": {
+     "title": "Run Id",
+     "type": "string"
+    },
+    "scene_id": {
+     "title": "Scene Id",
+     "type": "string"
+    },
+    "dataset": {
+     "title": "Dataset",
+     "type": "string"
+    },
+    "findings": {
+     "items": {
+      "$ref": "#/$defs/FindingAssets"
+     },
+     "title": "Findings",
+     "type": "array"
+    }
+   },
+   "required": [
+    "schema_version",
+    "run_id",
+    "scene_id",
+    "dataset",
+    "findings"
+   ],
+   "title": "VizManifest",
+   "type": "object"
+  }
+ },
+ "title": "LongTail C9 visualization export",
+ "description": "Generated from longtail/viz/schema.py; see docs/viz-schema.md.",
+ "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

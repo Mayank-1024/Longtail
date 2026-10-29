@@ -16,7 +16,7 @@ from synthetic import (
 
 from longtail.contracts import CandidateWindow, Finding, ScenarioSpec
 from longtail.verify.config import load_verify_config
-from longtail.verify.engine import _Pool, verify
+from longtail.verify.engine import TrackPool, verify
 from longtail.verify.predicates.base import Reason
 
 CFG = load_verify_config()
@@ -343,7 +343,9 @@ def test_pedestrian_crossing_while_we_move_is_verified_among_distractors():
         s, src, [PED], [("exists", ["a1"], {}), ("crossing_ego_path", ["a1"], {}), ("ego_moving", [], {})]
     )
     assert f.verified and all(r.status == "PASS" for r in f.results)
-    by_id = {o.track.track_id: o for o in _Pool(s, src, CFG).get("person", "pedestrian", tuple(s.cameras))}
+    by_id = {
+        o.track.track_id: o for o in TrackPool(s, src, CFG).get("person", "pedestrian", tuple(s.cameras))
+    }
     assert ("front_camera", 3) in by_id[f.bindings["a1"]].track.sources  # the crosser (third object)
     assert f.cost_usd == 0.0 and f.score > 0
 

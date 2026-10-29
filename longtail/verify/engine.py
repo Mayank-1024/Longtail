@@ -69,7 +69,7 @@ def verify(
     if track_source is None:
         raise RuntimeError("no track source: the SAM 3.1 client (C3) is not built yet, so pass track_source")
     cfg = cfg or load_verify_config()
-    pool = _Pool(scene, track_source, cfg)
+    pool = TrackPool(scene, track_source, cfg)
     spec_hash = hashlib.sha256(spec.model_dump_json().encode()).hexdigest()[:16]
     findings = []
     for window in windows:
@@ -83,8 +83,11 @@ def verify(
     return sorted(findings, key=lambda f: (not f.verified, -f.score))
 
 
-class _Pool:
-    """Tracked objects per (concept, class, cameras), associated (C4) and tracked (C5) once."""
+class TrackPool:
+    """Tracked objects per (concept, class, cameras), associated (C4) and tracked (C5) once.
+
+    Deterministic for a given TrackSource, so C9 can rebuild the tracks a finding was bound to.
+    """
 
     def __init__(self, scene: Scene, source: TrackSource, cfg: VerifyConfig) -> None:
         self.scene, self.source, self.cfg = scene, source, cfg
@@ -110,7 +113,12 @@ def _in_window(obj: TrackedObject, t0: float, t1: float) -> bool:
 
 
 def _verify_window(
-    spec: ScenarioSpec, window: CandidateWindow, scene: Scene, pool: _Pool, cfg: VerifyConfig, spec_hash: str
+    spec: ScenarioSpec,
+    window: CandidateWindow,
+    scene: Scene,
+    pool: TrackPool,
+    cfg: VerifyConfig,
+    spec_hash: str,
 ) -> Finding | None:
     sweeps = scene.lidar_timestamps()
     # ASSUMPTION A-88: window t0 and t1 are dataset timestamps in seconds, like Sample3D.ts (A-03)
@@ -306,6 +314,7 @@ def _summarise(
         margin = 0.0
     sweep_idx = [int(np.argmin(np.abs(sweeps - t))) for t in frames[a : b + 1]]
     pa, pb = _longest_run([r.status == "PASS" for r in frames_out])
+    every = [int(np.argmin(np.abs(sweeps - t))) for t in frames]
     evidence = {
         "reason": reason.value,
         # This predicate's own longest PASS run in the window, even when the others did not hold with it.
@@ -315,6 +324,8 @@ def _summarise(
         "frame_reasons": {k.value: v for k, v in Counter(r.reason for r in rs).items()},
         "example_frame": sweep_idx[rs.index(pick)],
         "example": pick.detail,
+        # ASSUMPTION A-102: every window frame's verdict, [sweep index, status, reason], for the C9 timeline
+        "timeline": [[i, r.status, r.reason.value] for i, r in zip(every, frames_out, strict=True)],
     }
     if value is not None:
         # ASSUMPTION A-08: every result with a value carries a numeric margin

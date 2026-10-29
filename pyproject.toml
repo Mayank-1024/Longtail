@@ -20,6 +20,7 @@ longtail = "longtail.cli:main"
 
 [dependency-groups]
 dev = [
+    "jsonschema>=4.26.0",
     "pytest>=8",
     "ruff>=0.6",
 ]
