@@ -1,0 +1,132 @@
+# Chethan's status
+
+Perception and verification (C1 to C10). Updated at the end of every task, on that task's branch. Last update: 2026-10-29, after C9.
+
+Everything below is tested on a synthetic scene only (`tests/synthetic.py`); PandaSet is not downloaded yet. The assumptions register (`docs/assumptions.md`, on the stacked branches) holds every choice the plan does not fix, with an owner; numbers and deviations from the plan are in `docs/eval-report.md`.
+
+## a. Status
+
+| Task | Status | Branch | PR | Tested on synthetic data | Real-data checks pending |
+|---|---|---|---|---|---|
+| Contracts (joint, M1) | Draft for review | `c/contracts-and-assumptions` | [#1](https://github.com/Mayank-1024/longtail/pull/1) | Validation, computed `verified`, assumption-tag test | none |
+| C1 Dataset adapter | Done | `c/c1-adapter` | [#2](https://github.com/Mayank-1024/longtail/pull/2) | Fake on-disk PandaSet sequence read through the real devkit; label guard; download script; scene-index selection | Build `index.json` (30 scenes + 3 phrase-tuning); one scene loads in under 5 s; ego axes, world up and camera poses against the devkit calibration |
+| C2 Projection and sync | Done | `c/c2-projection` | [#3](https://github.com/Mayank-1024/longtail/pull/3) | Projection, transforms, sync, gap report | Projection within 1 px of the devkit; overlays for six cameras by eye (Oct 30 gate); real gap distribution |
+| C3 SAM 3.1 client | Not started | | | | Smoke test (one clip, one concept), parser fixture, concept-phrase test; needs `llm/client.py` |
+| C4 Mask to LiDAR | Done | `c/c4-association` | [#4](https://github.com/Mayank-1024/longtail/pull/4) | Clusters, ground (incl. slopes), visibility filter, merging, frustum and box-only | 17 of 20 real SAM masks correct by eye (needs C3) |
+| C5 Tracks and ego path | Done | `c/c5-tracks` | [#5](https://github.com/Mayank-1024/longtail/pull/5) | Speeds, gaps, ego motion cancelling, corridor (straight, arc, stopped) | Parked car on a real scene under 0.3 m/s; corridor on the bird's-eye export |
+| C6 Verifier | Done | `c/c6-verifier` | [#6](https://github.com/Mayank-1024/longtail/pull/6) | PASS, FAIL and UNVERIFIABLE for all 10 predicates; binding, pruning, cap | Thresholds on PandaSet and tuning on development queries |
+| C7 Ground truth | Not started | | | Rules registered (A-95, A-96) | Needs your queries and gold specs (M7) |
+| C8 Metrics, ablation, breaks | Not started | | | | Needs C7 and the VLM baseline (M5) |
+| C9 Visualization export | Done | `c/c9-viz` | [#7](https://github.com/Mayank-1024/longtail/pull/7) | Overlays, bird's-eye JSON, timeline, manifest, schema, CLI | Overlays on real photos; real export size and time |
+| C10 Fresh-clone test | Not started (Nov 4) | | | | |
+
+Open failures, kept as strict expected failures and explained in `docs/eval-report.md`: C4's centroid sits about 0.3 m from a box's centre (surface-only LiDAR), and C5 still reads a parked car partly hidden by another car as moving for 1.2 s (C6 does not let it PASS `moving`).
+
+## b. Decisions needed from Mayank
+
+| Topic | ID | What is assumed | Why it matters |
+|---|---|---|---|
+| Contracts | A-02 | `contracts.py` follows plan section 4 except where another assumption changes it | The draft in #1 is the only coupling between our halves |
+| Contracts | A-06 | `PredicateCall.name` gains `ego_moving` and `ego_stopped`, with no actors | Needed for "while we move"; your planner must emit them |
+| Contracts | A-08, A-24 | Every result with a value has a numeric `evidence["margin"]`; none when the value is null | Your ranking (M3) reads it |
+| Contracts | A-17 | The engine returns unverified findings; only your `finish` tool drops them | The "rejected by verifier" tab and the catch rate need them |
+| Contracts | A-19 | Taxonomy: pedestrian, cyclist, car, truck, bus | Your planner's classes; dataset labels map onto these |
+| Contracts | A-20 | `Frame2D` boxes are inclusive pixels; masks are COCO compressed RLE; mask and conf may be null | Fixes the SAM and VLM-claim formats |
+| Contracts | A-21 | Every contract model rejects unknown fields | Planner typos fail validation and go back for retry |
+| Contracts | A-22 | `PredicateResult.required` is copied from the call, so `verified` is computed from the finding alone | Without it `verified` cannot be computed |
+| Contracts | A-23 | Predicate signatures: arity and argument names per the plan's C6 table; unknown arguments rejected | Your planner's output must match |
+| Dataset | A-01 | PandaSet. Download: sign up at https://pandaset.org/ (the devkit README's instructions), which leads to the download links. Licence: the dataset ships its own `LICENSE.txt`; I have not seen it (the devkit code is Apache-2.0) | Confirm the choice and that the licence allows our use and showing frames (your M0 licence check); send me the link |
+| Shared config | A-34 | `longtail/cli.py` is a thin argparse dispatcher; areas register subcommands (`scenes`, `viz`) | The plan gives `cli.py` to you; keep or replace it |
+| Shared config | | The pinned PandaSet devkit lists Jupyter in its requirements, pulling in about 118 packages | Slow CI; option: install the devkit with `--no-deps` (it needs only numpy, pandas, Pillow, transforms3d) or override the extras in uv |
+| Shared config | | `pyproject.toml` sets pytest `pythonpath = ["."]` | Tests import from the checkout even when an editable install is skipped (it is on my Mac); keep or drop |
+| CI | | The workflow is still in `.github/ci-pending/` | Needs a token with the `workflow` scope and a move to `.github/workflows/`; no PR has CI yet |
+| Evaluation (M7) | A-95 | Ground-truth positives and recall are counted per window, not per object, because the engine emits one finding per window | Shapes how you write queries and how recall reads in the README |
+| Evaluation (M7) | A-96 | Ground truth uses crossing_ego_path's 3 s look-ahead, so it cannot count a FAIL in a scene's last 3 s | Avoid gold specs whose only evidence is in a scene's last 3 s |
+| Pipeline (M3) | A-101 | Exports come from a saved run (`verify_and_record()` writes `runs/<run>/verify_run.json`) | Without a saved run the web view has nothing to show |
+| Web view (M6) | | Overlays are about 130 MB of JPEGs per finding at full resolution (six cameras, 8 s, measured without real photos) | Choose: downscale (e.g. 960 px wide, about 4x smaller) or export only the frames you show |
+| Web view (M6) | A-100 | The ego box is a 4.8 x 1.9 m placeholder centred on the LiDAR | Fine for drawing; replace if you know the vehicle's body box |
+| Client (M1) | | C3 will call `llm/client.py`, which is not built | I need: file upload with a cached file id (`files.create`), a streamed responses call returning the concatenated text, caching of the final text, ledger entries in frames and dollars, retry on 429 and 5xx but not 400, and replay mode |
+
+Other assumptions owned by "both" that touch your side, listed in each PR's "For Mayank" section: A-03 (units and frames), A-79 (reason codes), A-85 (score and binding choice), A-86 (track source), A-88 (window times), A-90 (binding search evidence), A-91 (joint timing), A-92 (`cost_usd` left at 0), A-99, A-102, A-103, A-106, A-107 (viz).
+
+## c. Interfaces your code calls
+
+All on the stacked branches until merged.
+
+**Scene API** (`longtail/data/base.py`, PandaSet in `longtail/data/pandaset.py`): times in seconds, poses as 4x4 `world_from_X` matrices, ego frame x forward, y left, z up.
+
+```python
+from longtail.data.index import open_scene
+scene = open_scene("002")              # from $LONGTAIL_DATA_DIR/pandaset/002
+scene.cameras                          # ('front_camera', ...)
+scene.frames("front_camera")           # [CameraFrame(frame_idx, ts, image_path), ...]
+scene.lidar(scene.lidar_timestamps()[0]).points   # (N, 5): x, y, z, intensity, t, world frame
+scene.ego_pose(ts), scene.extrinsics(camera, ts), scene.intrinsics(camera), scene.image_size(camera)
+scene.labels(i)                        # raises LabelAccessError outside eval_ground_truth()
+```
+
+**verify()** (`longtail/verify/engine.py`):
+
+```python
+from longtail.verify.engine import verify
+findings = verify(spec, windows, scene, track_source=my_source)   # list[Finding], verified first
+```
+
+One finding per window that has frames: the best binding, verified or not. Raises if `spec.clarification` is set, if a window is for another scene, or if no `track_source` is given.
+
+**track_source** (A-86): any callable `(scene, camera, concept) -> list[Track2D]`; C3's SAM client will provide the real one.
+
+```python
+def my_source(scene, camera, concept):
+    return sam_tracks_for(scene.scene_id, camera, concept)   # Track2D list from SAM 3.1
+```
+
+**Reason codes** (A-79, `longtail/verify/predicates/base.py`, `Reason`): PASS is `ok`. UNVERIFIABLE: `no_coverage`, `out_of_range`, `unsynced`, `truncated`, `not_observed`, `track_too_short`, `unreliable_speed`, `implausible_jump`, `requires_exists`. FAIL: `wrong_size`, `too_few_points`, `no_object_points`, `too_far`, `not_moving`, `not_stopped`, `outside_corridor`, `not_toward_corridor`, `wrong_side`, `not_near`, `not_occluded`, `shorter_than_min_duration`.
+
+**Finding evidence** (each `PredicateResult.evidence`):
+
+| Key | Meaning |
+|---|---|
+| `reason` | The result's reason code |
+| `margin` | How far the value clears the threshold (present exactly when `value` is set) |
+| `frames` | Sweep indices of the finding's interval |
+| `frame_status`, `frame_reasons` | Counts of PASS, FAIL, UNVERIFIABLE and of each reason over the interval |
+| `example_frame`, `example` | One representative frame and its numbers (e.g. `range_m`, `net_speed_mps`, `judged_window`) |
+| `longest_pass_s` | This predicate's own longest PASS run in the window |
+| `timeline` | Every window frame as `[sweep index, status, reason]` |
+| `binding_search` | `binding_cap_hit`, `bindings_tried`, `bindings_total_upper_bound`, `pruning_relaxed_for` |
+
+**verify_and_record()** (`longtail/verify/run.py`, A-101): call this instead of `verify()` for runs the web view will show.
+
+```python
+from longtail.verify.run import verify_and_record
+run = verify_and_record(spec, windows, scene, my_source, Path("runs") / run_id)
+run.findings                           # same findings as verify(); saved to runs/<run_id>/verify_run.json
+```
+
+**Viz export and schema** (`longtail/viz/`, `docs/viz-schema.json`, `docs/viz-schema.md`):
+
+```
+longtail viz runs/<run_id>              # every finding -> runs/<run_id>/viz/manifest.json
+longtail viz runs/<run_id>/<finding>    # one finding
+longtail viz --write-schema docs/viz-schema.json
+```
+
+Generate TypeScript from `$defs` (`VizManifest`, `BevExport`, `Timeline`). Drive the scrubber by `frame_idx`; the bird's-eye view is ego-centred per frame.
+
+## d. How to review and merge
+
+1. **Order:** #1 (contracts), #2 (C1), #3 (C2), #4 (C4), #5 (C5), #6 (C6), #7 (C9). Each stacked PR targets the branch below it, so its diff shows only its own task.
+2. Read each PR's "For Mayank" section first; that is what touches your side.
+3. Merge bottom-up with **"Create a merge commit"**, not squash. Squashing rewrites the commits the PRs above it are built on, and their diffs fill with already-merged changes.
+4. After each merge, check that the next PR's base is now `main`. GitHub usually retargets it when the merged branch is deleted; if not, change the base by hand (Edit, next to the title).
+5. If your review of #1 changes the contracts, tell me and I rebase the stack; please don't rebase it yourself.
+
+## e. What I need, in priority order
+
+1. The PandaSet download link (and the licence check), so the real-data checks and the Oct 30 projection gate can run.
+2. A review of #1 (contracts) and CI turned on.
+3. The evaluation queries and gold specs (M7), for C7.
+4. The `llm/client.py` interface, for the C3 SAM client.
+
+A matching `docs/status-mayank.md` on your side would let both of us (and any Claude Code session, see `CLAUDE.md`) pick up the other's state quickly.
