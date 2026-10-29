@@ -75,6 +75,7 @@ def test_spec_round_trips_through_json():
     assert ScenarioSpec.model_validate_json(spec.model_dump_json()) == spec
 
 
+# ASSUMPTION A-06: ego-state predicates with no actors
 def test_ego_predicates_take_no_actors():
     with pytest.raises(ValidationError, match="ego_moving takes 0 actor"):
         PredicateCall(name="ego_moving", actors=["a1"], args={})
@@ -85,6 +86,7 @@ def test_unknown_predicate_rejected():
         PredicateCall(name="teleporting", actors=["a1"], args={})
 
 
+# ASSUMPTION A-23: predicate signatures follow the plan C6 table
 @pytest.mark.parametrize(
     "call, message",
     [
@@ -119,12 +121,14 @@ def test_duplicate_actor_ids_rejected():
         _spec(actors=[actor, actor], predicates=[])
 
 
+# ASSUMPTION A-19: the taxonomy is a fixed tuple in contracts.py
 def test_class_outside_taxonomy_rejected():
     assert "pedestrian" in TAXONOMY
     with pytest.raises(ValidationError):
         ActorSpec(id="a1", cls="tree", sam_prompt="tree")
 
 
+# ASSUMPTION A-21: contract models reject unknown fields
 def test_unknown_fields_rejected():
     with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
         _spec(priority="high")
@@ -143,6 +147,7 @@ def test_window_times_ordered():
         CandidateWindow(window_id="w", scene_id="s", t0=2.0, t1=1.0, cameras=[], score=0, source="uniform")
 
 
+# ASSUMPTION A-20: mask_rle and conf may be absent
 def test_frame_box_ordered_and_optional_fields():
     frame = Frame2D(frame_idx=0, ts=1.0, box_xyxy=(1, 2, 3, 4))
     assert frame.mask_rle is None and frame.conf is None
@@ -150,6 +155,8 @@ def test_frame_box_ordered_and_optional_fields():
         Frame2D(frame_idx=0, ts=1.0, box_xyxy=(5, 2, 3, 4))
 
 
+# ASSUMPTION A-08: evidence holds a numeric margin
+# ASSUMPTION A-24: margin is required exactly when value is set
 def test_result_margin_required_when_value_set():
     with pytest.raises(ValidationError, match="margin must be a number"):
         _result(margin=None)
@@ -178,11 +185,13 @@ def test_not_verified_when_a_required_result_does_not_pass(status):
     assert _finding([_result(), failing]).verified is False
 
 
+# ASSUMPTION A-22: results carry required, so verified is computed from the finding alone
 def test_optional_failure_does_not_block_verification():
     optional = _result(status="FAIL", required=False, value=0.1, margin=-0.4, rid="r2")
     assert _finding([_result(), optional]).verified is True
 
 
+# ASSUMPTION A-22: a finding with no required results is not verified
 def test_not_verified_without_required_results():
     assert _finding([]).verified is False
     assert _finding([_result(required=False)]).verified is False
