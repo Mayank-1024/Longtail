@@ -75,6 +75,10 @@ class MatchingConfig(_Strict):
     min_box_iou: float = Field(gt=0, le=1)
 
 
+class ClaimsConfig(_Strict):
+    min_inside_frac: float = Field(gt=0, le=1)
+
+
 class GtConfig(_Strict):
     """C6 predicates read ctx.cfg.predicates.<name> and ctx.cfg.ego_path; those sections match verify.yaml."""
 
@@ -86,6 +90,7 @@ class GtConfig(_Strict):
     ego_path: EgoPathConfig
     predicates: GtPredicatesConfig
     matching: MatchingConfig
+    claims: ClaimsConfig
 
 
 @cache
@@ -836,12 +841,21 @@ def match(findings: list[ScoredFinding], positives: list[Positive], m: MatchingC
 # Model claims (A-10), for C8's hallucination-catch rate
 
 
+def inside_frac(claim: tuple[float, ...] | np.ndarray, label: tuple[float, ...] | np.ndarray) -> float:
+    """Share of the claimed box's area that lies inside the label box (intersection over the claimed box)."""
+    iw = max(0.0, min(claim[2], label[2]) - max(claim[0], label[0]))
+    ih = max(0.0, min(claim[3], label[3]) - max(claim[1], label[1]))
+    area = (claim[2] - claim[0]) * (claim[3] - claim[1])
+    return float(iw * ih / area) if area > 0 else 0.0
+
+
 def claim_is_true(labels: LabelScene, camera: str, frame_idx: int, cls: str, box: tuple[float, ...]) -> bool:
-    """A box claim is true when a labelled cuboid of the class projects onto it with IoU >= min_box_iou."""
+    """A box claim is true when min_inside_frac of it lies inside a projected label box of the class."""
     require_label_access("ground truth")
-    # ASSUMPTION A-10: false = no labelled cuboid of the claimed class projects onto the box with IoU >= 0.3
-    need = labels.cfg.matching.min_box_iou
-    return any(c.cls == cls and box_iou(box, b) >= need for c, b in labels.boxes_at(camera, frame_idx))
+    # ASSUMPTION A-10: true = >= 50% of the claimed box inside a projected cuboid box of the claimed class, so
+    # a box on the visible part of an occluded object counts; IoU would call it a hallucination
+    need = labels.cfg.claims.min_inside_frac
+    return any(c.cls == cls and inside_frac(box, b) >= need for c, b in labels.boxes_at(camera, frame_idx))
 
 
 # Motion source agreement (geometry against the human-labelled attributes)

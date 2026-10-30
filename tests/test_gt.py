@@ -329,6 +329,28 @@ def test_verifier_crossing_finding_matches_ground_truth(scene, labels):
     assert m.positive_id == positive.positive_id and m.iou > 0.5
 
 
+# Claims (A-10)
+
+
+def test_claim_truth_is_intersection_over_the_claimed_box(scene, labels):
+    from synthetic import object_track2d
+
+    # ASSUMPTION A-10: the hidden pedestrian's SAM box covers only its head above the car roof: IoU with its
+    # projected cuboid is tiny, but the box lies inside it, so the claim is true
+    head = object_track2d(scene, "hidden_ped", "front_camera").frames[0]
+    [(_, label_box)] = [(c, b) for c, b in labels.boxes_at("front_camera", 0) if c.uuid == "hidden_ped"]
+    assert gt.box_iou(head.box_xyxy, label_box) < 0.1 and gt.inside_frac(head.box_xyxy, label_box) == 1.0
+    with eval_ground_truth():
+        assert gt.claim_is_true(labels, "front_camera", 0, "pedestrian", head.box_xyxy)
+        assert not gt.claim_is_true(labels, "front_camera", 0, "car", head.box_xyxy)  # wrong class
+        assert not gt.claim_is_true(labels, "front_camera", 0, "cyclist", (420, 0, 600, 120))  # empty sky
+        # Widened to the right (only the car is there): half of it inside passes, less does not.
+        x1, y1, x2, y2 = label_box
+        w = x2 - x1
+        assert gt.claim_is_true(labels, "front_camera", 0, "pedestrian", (x1, y1, x2 + w, y2))
+        assert not gt.claim_is_true(labels, "front_camera", 0, "pedestrian", (x1, y1, x2 + 1.2 * w, y2))
+
+
 # Motion source
 
 

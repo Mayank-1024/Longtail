@@ -55,5 +55,11 @@ matching:
   # Plan C7: same scene, temporal IoU >= 0.3, each bound actor within 2 m of a labelled object.
   min_temporal_iou: 0.3
   max_actor_distance_m: 2.0
-  # ASSUMPTION A-127: a finding with boxes only (no LiDAR positions) matches by box IoU, A-10's rule
+  # ASSUMPTION A-127: a finding with boxes only (no LiDAR positions) matches by box IoU
   min_box_iou: 0.3
+
+claims:
+  # ASSUMPTION A-10: a claimed box is true when at least this share of its own area lies inside a projected
+  # label box of the claimed class (intersection over the claimed box): SAM and VLM boxes cover the visible
+  # part, the projected cuboid the whole object
+  min_inside_frac: 0.5
