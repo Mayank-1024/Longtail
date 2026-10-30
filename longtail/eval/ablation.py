@@ -32,6 +32,8 @@ from longtail.eval.metrics import (
     Claim,
     QueryOutcome,
     count_claims,
+    precision_at_k,
+    returned_top_k,
     summarise,
 )
 from longtail.geometry.associate import associate
@@ -489,14 +491,14 @@ def thresholds_hash(verify_cfg: VerifyConfig, gt_cfg: gt.GtConfig) -> str:
 def results_doc(name: str, outcomes: list[QueryOutcome], setup: Setup, split: str, description: str) -> dict:
     per_query = []
     for o in outcomes:
-        top = o.ranked[:10]
         per_query.append(
             {
                 "query_id": o.query_id,
                 "positives": o.n_positives,
                 "returned": len(o.ranked),
                 "matched": len(o.matched),
-                "p_at_10": sum(f in o.matched for f in top) / len(top) if top else None,
+                "p_at_10": precision_at_k(o),
+                "returned_top10": returned_top_k(o),
                 "cost_usd": round(o.cost_usd, 6),
                 "seconds": round(o.seconds, 3),
                 "claims_false": o.claims_false,
@@ -582,11 +584,20 @@ def chart(out_dir: Path) -> Path | None:
                 )  # fmt: skip
             # Above the interval, so the label never sits on the error bar.
             top = m["ci95"][1] if m["ci95"] is not None else m["value"]
-            ax.text(x, top + 0.015, f"{m['value']:.2f}", ha="center", va="bottom", fontsize=7, color=ink)
+            v = m["value"]
+            label = f"{v:.3f}" if 0 < v < 0.1 else f"{v:.2f}"  # 0.025 must not read as 0.03
+            if key == "p_at_10":
+                # ASSUMPTION A-134: P@10 divides by 10, so the bar shows how many findings came back
+                label += f"\n{doc['metrics']['returned_top10']['value']:.1f}/10"
+            ax.text(x, top + 0.015, label, ha="center", va="bottom", fontsize=7, color=ink, linespacing=1.1)
     for c in docs:
         ax.bar(0, 0, color=COLOURS[c], label=f"({c}) {DESCRIPTIONS[c]}")
-    ax.set_xticks(range(len(CHART_METRICS)), [label for _, label in CHART_METRICS], color=ink)
-    ax.set_ylim(0, 1.15)
+    names = [
+        name if key != "p_at_10" else f"{name}\n(returned per query / 10)" for key, name in CHART_METRICS
+    ]
+    ax.set_xticks(range(len(CHART_METRICS)), names, color=ink)
+    ax.set_ylim(0, 1.2)
+    ax.set_yticks(np.linspace(0, 1, 6))
     ax.set_ylabel("share, with 95% bootstrap interval", color=muted, fontsize=8)
     ax.tick_params(colors=muted, labelsize=8)
     ax.grid(axis="y", color="#e4e3df", linewidth=0.6, zorder=0)

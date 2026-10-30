@@ -55,12 +55,15 @@ class QueryOutcome:
     extra: dict = field(default_factory=dict)
 
 
-def precision_at_k(o: QueryOutcome, k: int = K) -> float | None:
-    """Matched share of the top k; None when the configuration returned nothing for the query."""
-    # ASSUMPTION A-134: P@10 divides by the number returned when under 10, and a query with nothing returned
-    # is left out of the mean (the count of such queries is reported next to it, and recall carries the miss)
-    top = o.ranked[:k]
-    return sum(f in o.matched for f in top) / len(top) if top else None
+def precision_at_k(o: QueryOutcome, k: int = K) -> float:
+    """Matched findings in the top k divided by k: fewer than k returned counts the empty slots as misses."""
+    # ASSUMPTION A-134: P@10 always divides by 10 (a query with nothing returned scores 0); how many findings
+    # each query returned in its top 10 is reported next to it (returned_top10)
+    return sum(f in o.matched for f in o.ranked[:k]) / k
+
+
+def returned_top_k(o: QueryOutcome, k: int = K) -> int:
+    return min(k, len(o.ranked))
 
 
 def count_claims(claims: list[Claim], truth: dict[str, bool]) -> dict[str, int]:
@@ -88,8 +91,12 @@ def _ratio(num: float, den: float) -> float | None:
 
 
 def p_at_10(qs: list[QueryOutcome]) -> float | None:
-    vals = [v for o in qs if (v := precision_at_k(o)) is not None]
-    return float(np.mean(vals)) if vals else None
+    return float(np.mean([precision_at_k(o) for o in qs])) if qs else None
+
+
+def returned_top10(qs: list[QueryOutcome]) -> float | None:
+    """Mean number of findings in each query's top 10 (the denominator P@10 does not show)."""
+    return float(np.mean([returned_top_k(o) for o in qs])) if qs else None
 
 
 def recall(qs: list[QueryOutcome]) -> float | None:
@@ -122,6 +129,7 @@ def hallucination_rate(qs: list[QueryOutcome]) -> float | None:
 
 METRICS: dict[str, Callable[[list[QueryOutcome]], float | None]] = {
     "p_at_10": p_at_10,
+    "returned_top10": returned_top10,
     "recall": recall,
     "cost_per_query_usd": cost_per_query,
     "seconds_per_query": seconds_per_query,

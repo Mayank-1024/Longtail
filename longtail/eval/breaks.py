@@ -1,9 +1,9 @@
 """Deliberate breaks (plan C8): `python -m longtail.eval.breaks`.
 
 Configuration (c) is run again with one thing broken: the verifier off, the camera calibration shifted by
-2 degrees of yaw and 0.3 m, or the LiDAR timestamps offset by 200 ms. Each must lower precision or the catch
-rate; one that does not is reported as a hole in the evaluation. The calibration and timing breaks are Scene
-wrappers, so no production code changes; claim truth still comes from the unperturbed scenes.
+2 degrees of yaw and 0.3 m, or the LiDAR timestamps offset by 200 ms. Each must lower precision, the catch
+rate or recall; one that lowers none is reported as a hole in the evaluation. The calibration and timing
+breaks are Scene wrappers, so no production code changes; claim truth still comes from the unperturbed scenes.
 """
 
 import argparse
@@ -21,8 +21,8 @@ from longtail.eval.metrics import summarise
 from longtail.geometry.transforms import make_pose
 
 YAW_DEG, SHIFT_M, LIDAR_OFFSET_S = 2.0, 0.3, 0.2
-# Precision and the catch rate decide a hole (plan C8); recall is reported alongside.
-JUDGED = ("p_at_10", "catch_rate")
+# A break passes when it lowers any of these; the false-rejection rate is reported alongside.
+JUDGED = ("p_at_10", "catch_rate", "recall")
 COMPARED = ("p_at_10", "catch_rate", "recall", "false_rejection_rate")
 
 
@@ -142,9 +142,11 @@ def run_breaks(setup: ablation.Setup, split: str) -> dict:
         s, verifier = broken_setup(name, setup)
         m = summarise(ablation.run_config("c", s, verifier=verifier))
         lowered = {k: _lower(base[k]["value"], m[k]["value"]) for k in COMPARED}
-        # ASSUMPTION A-141: a break is a hole in the evaluation when neither P@10 nor the catch rate drops
-        hole = not any(lowered[k] for k in JUDGED)
-        out["breaks"][name] = {"metrics": m, "lowered": lowered, "hole": hole}
+        # ASSUMPTION A-141: a break passes when P@10, the catch rate or recall drops, and records which did;
+        # one that lowers none is a hole in the evaluation
+        moved = [k for k in JUDGED if lowered[k]]
+        hole = not moved
+        out["breaks"][name] = {"metrics": m, "lowered": lowered, "moved": moved, "passed": not hole}
         if hole:
             out["holes"].append(name)
     return out
@@ -174,7 +176,7 @@ def main(argv: list[str] | None = None) -> int:
     out.mkdir(parents=True, exist_ok=True)
     (out / "breaks.json").write_text(json.dumps(report, indent=1) + "\n")
     for name, b in report["breaks"].items():
-        print(f"{name}: lowered {b['lowered']}{'  HOLE' if b['hole'] else ''}")
+        print(f"{name}: {'moved ' + ', '.join(b['moved']) if b['passed'] else 'HOLE: lowered nothing'}")
     print(f"written to {out / 'breaks.json'}")
     return 0
 

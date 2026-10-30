@@ -135,31 +135,47 @@ Synthetic only (the scene's true boxes as PandaSet-style cuboids). The four synt
 
 ## C8: metrics, ablation and breaks
 
-Synthetic only: one 3 s scene and the four synthetic gold specs (dev and held-out together), with a stand-in SAM that returns the true objects (confidence 0.9) plus two confident hallucinations (0.97): a "person" on the wall and a "cyclist" on the empty sky. These numbers test the machinery. With 4 queries the intervals are wide and say nothing about PandaSet.
+Synthetic only: one 3 s scene and the four synthetic gold specs (dev and held-out together), with a stand-in SAM that returns the true objects (confidence 0.9) plus two confident hallucinations (0.97): a "person" on the wall and a "cyclist" on the empty sky. These numbers test the machinery. With 4 queries the intervals are wide and say nothing about PandaSet. Re-run on 2026-10-30 after the A-10 and P@10 changes.
 
-| Configuration | P@10 | Recall | Catch rate | False rejection | Hallucination rate | Cost / query | Seconds / query |
-|---|---|---|---|---|---|---|---|
-| (b) + SAM | 0.25 [0.00, 0.75] | 0.33 [0.00, 1.00] | n/a (no verifier) | n/a | 0.58 | $0.060 | 0.11 |
-| (c) + LiDAR verification | 1.00 [1.00, 1.00] | 0.67 [0.00, 1.00] | 1.00 [1.00, 1.00] | 0.00 | 0.50 | $0.075 | 1.0 |
-| (c), verifier off | 0.50 | 0.67 | 0.00 | 0.00 | 0.50 | | |
-| (c), calibration 2 degrees + 0.3 m | 0.00 | 0.00 | 1.00 | 0.17 | 0.50 | | |
-| (c), LiDAR 200 ms late | 1.00 | 0.33 | 1.00 | 0.15 | 0.50 | | |
+| Configuration | P@10 | Returned (top 10, mean per query) | Recall | Catch rate | False rejection | Hallucination rate | Cost / query | Seconds / query |
+|---|---|---|---|---|---|---|---|---|
+| (b) + SAM | 0.025 [0.000, 0.075] | 1.0 / 10 | 0.33 [0.00, 1.00] | n/a (no verifier) | n/a | 0.35 | $0.060 | 0.11 |
+| (c) + LiDAR verification | 0.050 [0.000, 0.100] | 0.5 / 10 | 0.67 [0.00, 1.00] | 1.00 [1.00, 1.00] | 0.29 [0.00, 0.48] | 0.30 | $0.075 | 1.0 |
+| (c), verifier off | 0.050 | 1.0 / 10 | 0.67 | 0.00 | 0.00 | 0.30 | | |
+| (c), calibration 2 degrees + 0.3 m | 0.000 | 0.5 / 10 | 0.00 | 1.00 | 0.41 | 0.30 | | |
+| (c), LiDAR 200 ms late | 0.025 | 0.25 / 10 | 0.33 | 1.00 | 0.39 | 0.30 | | |
 
-(c) returns nothing for two queries: the cyclist (none exist) and the pedestrian behind the car, whose head alone shows above the roof (too few points for exists). Costs are at list price with a cold cache (A-13): six $0.01 SAM requests per class asked for.
+P@10 divides by 10 (A-134). Each query here has at most one positive, so 0.1 is the most any query can score. (c) returns nothing for two queries:
+- **The cyclist:** none exist in the scene.
+- **The pedestrian behind the car:** only its head shows above the roof, too few points for exists.
+
+The hidden pedestrian also gives the false-rejection rate. Its 60 head boxes are true claims under A-10, and the verifier rejects them all (60 of 210 true claims). Costs are at list price with a cold cache (A-13): six $0.01 SAM requests for each class a query asks for.
+
+### A-10 changed: intersection over the claimed box
+
+A claim is now true when at least half of its box lies inside a projected label box of its class (`claims.min_inside_frac: 0.5`). Under the old rule, IoU >= 0.3 against the projected cuboid, the hidden pedestrian's 9 x 5 px head box scored IoU 0.06 against its own label: its 60 boxes counted as hallucinations, and the verifier's rejections counted as catches. The two rules on configuration (c):
+
+| A-10 rule | False claims | Caught | Catch rate | True claims | Rejected | False rejection |
+|---|---|---|---|---|---|---|
+| IoU >= 0.3 (before) | 150 | 150 | 1.00 | 150 | 0 | 0.00 |
+| >= 50% of the claimed box inside (now) | 90 | 90 | 1.00 | 210 | 60 | 0.29 |
+
+The catch rate is unchanged. The verifier's real cost shows instead: it rejects occluded objects it cannot see in LiDAR. Box-only matching of findings (A-127) still uses IoU >= 0.3, so in configurations (a) and (b) a heavily occluded object's box will not match its positive.
 
 ### Breaks
 
-- **Verifier off:** P@10 and the catch rate both drop.
-- **Calibration shift:** P@10 drops to 0: a finding the labels do not support gets verified.
-- **LiDAR 200 ms late: a hole.** Neither P@10 nor the catch rate drops; only recall (0.67 to 0.33). Static objects do not move in the world frame, so their points still land in their masks; the moving crosser's points slip about 0.3 m, and the verifier then fails safe (rejects) rather than verifying something wrong. Real scenes have more moving objects and may behave differently. Re-check on PandaSet.
+A break passes when it lowers P@10, the catch rate or recall (A-141). All three pass; `breaks.json` records which metrics each one moved.
+
+- **Verifier off, moved the catch rate** (1.00 to 0.00). P@10 does not move: the unverified findings rank below the verified hits, and P@10 over 10 counts hits only.
+- **Calibration shift, moved P@10 and recall** (to 0.00). The crossing finding is lost, and a finding the labels do not support gets verified.
+- **LiDAR 200 ms late, moved P@10 and recall. Fails safe: shows up as lost recall** (0.67 to 0.33). Static objects do not move in the world frame, so their points still land in their masks. The moving crosser's points slip about 0.3 m, and the verifier rejects it rather than verifying something wrong. The catch rate stays at 1.00, and P@10 drops only because a lost finding is an empty slot out of 10. Real scenes have more moving objects; re-check on PandaSet.
 
 ### Where the plan's C8 spec did not work as written
 
-- **A-10 counts occluded objects as hallucinations.** SAM boxes cover what is visible; a projected cuboid covers the whole object. The pedestrian behind the car has a 9 x 5 px SAM box (its head) with IoU 0.06 against its own label, so its 60 boxes count as false claims. The verifier rejects them, and the catch rate counts that as a catch. If those claims counted as true, the catch rate stays 1.00 (90 of 90) but false rejection rises from 0.00 to 0.29 (60 of 210), by the same counts. A fix would call a claim true when, say, half of its box lies inside a projected cuboid of the class. A-10 is unchanged for now: Chethan's decision.
 - **"Verifier off" is not a Scene perturbation.** It is a flag on configuration (c): every finding counts as verified and every claim as accepted (A-141). The other two breaks are Scene wrappers.
 - **The catch rate needs a verifier.** Configuration (b) runs none, so it reports the hallucination rate instead (A-138). For (a) the verifier checks the baseline's cited boxes, as plan 3.4 says.
 - **Uniform windows overlap** (2 s every 1 s, padded by 1 s), so one event yields a finding per window. Without merging the duplicates (A-137), they would fill the top 10, all but one unmatched.
-- **P@10 with fewer than 10 findings** divides by the number returned (A-134). The plan does not say; dividing by 10 would punish a verifier for returning few, verified findings.
+- **P@10 over 10 is insensitive to false positives** when a query returns 10 or fewer findings and the hits rank first: then it counts hits, like recall capped at 10. Precision among the returned findings is P@10 x 10 / returned, from the two numbers reported side by side.
 
 ## C9: visualization export
 
