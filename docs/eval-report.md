@@ -122,6 +122,17 @@ Why "stopped" PASSes on a 0.6 s run (A-94): every frame is judged on a full 1 s 
 
 Neither car ever PASSes moving. The implausible-jump rule is what stops the C5 spikes from becoming "moving", but most of their frames end up UNVERIFIABLE rather than stopped: the "stopped" verdict rests on 0.6 s of evidence. That is honest, and it is thin; better positions for speed (C5) would turn those frames into evidence.
 
+## C7: ground truth from labels
+
+Synthetic only (the scene's true boxes as PandaSet-style cuboids). The four synthetic gold specs give the expected positives: the crosser from 0.0 to 2.5 s, the parked car and the pedestrian behind it over the whole 3 s, and none for the cyclist (flagged).
+
+### Where the plan's C7 spec did not work as written
+
+- **"The same predicate definitions with label geometry"** works for eight of the ten predicates as code, not just as definitions: they run on cuboid tracks unchanged. Two read LiDAR clusters and need label versions (A-125): `exists` becomes "the cuboid is visible" (a point count or size prior would make the labels disagree with themselves), and `occluded_by` compares projected cuboid boxes, which are amodal by construction. `within_distance` called `exists` directly; it now goes through `Context.evaluate`, so the label version is used (A-120).
+- **"Positive windows (scene, t0, t1, label ids)"**: windows depend on how a pipeline cuts the scene, so positives are events instead (A-126): maximal intervals where the spec holds for some binding, with overlapping bindings merged. This changes A-95 (owned by both) and waits on Mayank's agreement.
+- **"Each bound actor lies within 2 m of the labelled object"**: the configurations without LiDAR (a and b) have no 3D position. They match on box IoU >= 0.3 against the label's projected box instead, A-10's rule (A-127).
+- **Motion from geometry** is circular in one way: the verifier's motion and the ground truth's are the same code. PandaSet labels moving or stopped per frame (`attributes.object_motion` for vehicles and bicycles, `attributes.pedestrian_behavior` for pedestrians), so `motion_source: attribute` is available and `longtail gt motion-report` measures how often the two agree (A-124). On the synthetic scene they agree on all 90 judged frames; the real number needs PandaSet.
+
 ## C9: visualization export
 
 Per finding (`longtail viz`), measured on the synthetic scene; the second row is sized like PandaSet (an 8 s window, 1920x1080 images, about 76k LiDAR points per sweep), with a plain background in place of photos.

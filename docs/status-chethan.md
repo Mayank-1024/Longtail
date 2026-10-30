@@ -1,6 +1,6 @@
 # Chethan's status
 
-Perception and verification (C1 to C10). Updated at the end of every task, on that task's branch. Last update: 2026-10-29, after C3 (offline parts).
+Perception and verification (C1 to C10). Updated at the end of every task, on that task's branch. Last update: 2026-10-29, after C7 (ground truth).
 
 Everything below is tested on a synthetic scene only (`tests/synthetic.py`); PandaSet is not downloaded yet. The assumptions register (`docs/assumptions.md`, on the stacked branches) holds every choice the plan does not fix, with an owner; numbers and deviations from the plan are in `docs/eval-report.md`.
 
@@ -15,7 +15,7 @@ Everything below is tested on a synthetic scene only (`tests/synthetic.py`); Pan
 | C4 Mask to LiDAR | Done | `c/c4-association` | [#4](https://github.com/Mayank-1024/longtail/pull/4) | Clusters, ground (incl. slopes), visibility filter, merging, frustum and box-only | 17 of 20 real SAM masks correct by eye (needs C3) |
 | C5 Tracks and ego path | Done | `c/c5-tracks` | [#5](https://github.com/Mayank-1024/longtail/pull/5) | Speeds, gaps, ego motion cancelling, corridor (straight, arc, stopped) | Parked car on a real scene under 0.3 m/s; corridor on the bird's-eye export |
 | C6 Verifier | Done | `c/c6-verifier` | [#6](https://github.com/Mayank-1024/longtail/pull/6) | PASS, FAIL and UNVERIFIABLE for all 10 predicates; binding, pruning, cap | Thresholds on PandaSet and tuning on development queries |
-| C7 Ground truth | Not started | | | Rules registered (A-95, A-96) | Needs your queries and gold specs (M7) |
+| C7 Ground truth | Done on synthetic (draft) | `c/c7-gt` | C7_PR | Four synthetic gold specs (crossing, parked car, pedestrian hidden by a car, zero-positive cyclist); sibling dedup; 3 s horizon; event merging; one-to-one matching at IoU 0.3; label guard; the verifier's crossing finding matches its positive; `longtail gt build`, `spotcheck`, `motion-report` | Your 25 queries and gold specs (M7); `longtail gt build` on 30 scenes; 5 positives checked by eye; geometry vs attribute motion agreement; sibling uuids (A-16) |
 | C8 Metrics, ablation, breaks | Not started | | | | Needs C7 and the VLM baseline (M5) |
 | C9 Visualization export | Done | `c/c9-viz` | [#7](https://github.com/Mayank-1024/longtail/pull/7) | Overlays, bird's-eye JSON, timeline, manifest, schema, CLI | Overlays on real photos; real export size and time |
 | C10 Fresh-clone test | Not started (Nov 4) | | | | |
@@ -40,7 +40,10 @@ Open failures, kept as strict expected failures and explained in `docs/eval-repo
 | Shared config | | The pinned PandaSet devkit lists Jupyter in its requirements, pulling in about 118 packages | Slow CI; option: install the devkit with `--no-deps` (it needs only numpy, pandas, Pillow, transforms3d) or override the extras in uv |
 | Shared config | | `pyproject.toml` sets pytest `pythonpath = ["."]` | Tests import from the checkout even when an editable install is skipped (it is on my Mac); keep or drop |
 | CI | | The workflow is still in `.github/ci-pending/` | Needs a token with the `workflow` scope and a move to `.github/workflows/`; no PR has CI yet |
-| Evaluation (M7) | A-95 | Ground-truth positives and recall are counted per window, not per object, because the engine emits one finding per window | Shapes how you write queries and how recall reads in the README |
+| Evaluation (M7) | A-95, A-126 | **Changed:** positives are now events (maximal intervals where the gold spec holds for at least `min_duration_s`), not windows. A-95 is owned by both: please agree or object | Recall is over events; overlapping findings of one event count once |
+| Evaluation (M7) | A-128 | Queries file format: `format: longtail.queries/v1`, then per query `query_id`, `text`, `split` (dev or heldout), `tier`, `gold` (a ScenarioSpec); example in `tests/fixtures/gold_synthetic.yaml` | `longtail gt build <file>` reads it; write M7's queries in it, or tell me your format |
+| Evaluation (M7) | A-123 | PandaSet labels to classes: Pickup Truck, Medium-sized Truck and Semi-truck are `truck`; a Bicycle is a `cyclist` only with a rider | Decides which queries have positives (e.g. "a truck" includes pickups) |
+| Evaluation (M7) | A-127 | Matching: same scene, temporal IoU >= 0.3, every bound actor within 2 m of a labelled object (boxes-only findings: box IoU >= 0.3) | How your baseline (a) and pipeline findings are scored |
 | Evaluation (M7) | A-96 | Ground truth uses crossing_ego_path's 3 s look-ahead, so it cannot count a FAIL in a scene's last 3 s | Avoid gold specs whose only evidence is in a scene's last 3 s |
 | Pipeline (M3) | A-101 | Exports come from a saved run (`verify_and_record()` writes `runs/<run>/verify_run.json`) | Without a saved run the web view has nothing to show |
 | Web view (M6) | | Overlays are about 130 MB of JPEGs per finding at full resolution (six cameras, 8 s, measured without real photos) | Choose: downscale (e.g. 960 px wide, about 4x smaller) or export only the frames you show |
@@ -90,6 +93,7 @@ The real one (C3, `longtail/vision/track_source.py`), once there is a key:
 ```python
 from longtail.vision.sam_client import SamClient, transport_from_env
 from longtail.vision.track_source import sam_track_source
+
 source = sam_track_source(SamClient(transport_from_env()))  # replay=True or LONGTAIL_REPLAY=1: cache only
 findings = verify(spec, windows, scene, track_source=source)
 ```
@@ -118,6 +122,16 @@ run = verify_and_record(spec, windows, scene, my_source, Path("runs") / run_id)
 run.findings  # same findings as verify(); saved to runs/<run_id>/verify_run.json
 ```
 
+**Ground truth** (C7, `longtail/eval/gt.py`; reads labels, so evaluation only):
+
+```
+longtail gt build longtail/eval/queries/queries.yaml   # gt/<query_id>.json + gt/summary.json; zero-positive queries flagged
+longtail gt spotcheck <query_id> --n 5                 # five random positives: scene, time, label ids
+longtail gt motion-report                              # geometric motion vs the labelled attributes, per class
+```
+
+Pass `verify(..., pool=TrackPool(scene, source, cfg))` to keep the engine's tracks; `gt.scored_finding(finding, pool)` turns a finding into what the matcher scores.
+
 **Viz export and schema** (`longtail/viz/`, `docs/viz-schema.json`, `docs/viz-schema.md`):
 
 ```
@@ -130,7 +144,7 @@ Generate TypeScript from `$defs` (`VizManifest`, `BevExport`, `Timeline`). Drive
 
 ## d. How to review and merge
 
-1. **Order:** #1 (contracts), #2 (C1), #3 (C2), #4 (C4), #5 (C5), #6 (C6), #7 (C9). Each stacked PR targets the branch below it, so its diff shows only its own task.
+1. **Order:** #3 (C2), #4 (C4), #5 (C5), #6 (C6), #7 (C9), #9 (C3), then C7 (#1, #2 and #8 are merged). Each stacked PR targets the branch below it, so its diff shows only its own task.
 2. Read each PR's "For Mayank" section first; that is what touches your side.
 3. Merge bottom-up with **"Create a merge commit"**, not squash. Squashing rewrites the commits the PRs above it are built on, and their diffs fill with already-merged changes.
 4. After each merge, check that the next PR's base is now `main`. GitHub usually retargets it when the merged branch is deleted; if not, change the base by hand (Edit, next to the title).
@@ -140,7 +154,7 @@ Generate TypeScript from `$defs` (`VizManifest`, `BevExport`, `Timeline`). Drive
 
 1. The PandaSet download link (and the licence check), so the real-data checks and the Oct 30 projection gate can run. A Meta API key with a spend limit for me too, for the SAM smoke test.
 2. A review of #1 (contracts) and CI turned on.
-3. The evaluation queries and gold specs (M7), for C7.
+3. The evaluation queries and gold specs (M7) in the A-128 format, so `longtail gt build` can flag zero-positive queries before the Oct 31 freeze.
 4. The `llm/client.py` interface, for the C3 SAM client.
 
 A matching `docs/status-mayank.md` on your side would let both of us (and any Claude Code session, see `CLAUDE.md`) pick up the other's state quickly.

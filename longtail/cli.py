@@ -6,6 +6,7 @@ import argparse
 import sys
 
 from longtail.data import cli as data_cli
+from longtail.eval import cli as gt_cli
 from longtail.vision import cli as sam_cli
 from longtail.viz import cli as viz_cli
 
@@ -18,6 +19,8 @@ def main(argv: list[str] | None = None) -> int:
     viz_cli.register(sub)
     # ASSUMPTION A-119: `longtail sam` is registered here too, in the shared dispatcher (A-34)
     sam_cli.register(sub)
+    # ASSUMPTION A-131: `longtail gt` is registered here too (A-34)
+    gt_cli.register(sub)
     args = parser.parse_args(argv)
     return args.func(args)
 

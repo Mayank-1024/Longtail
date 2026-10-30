@@ -58,10 +58,12 @@ def verify(
     *,
     track_source: TrackSource | None = None,
     cfg: VerifyConfig | None = None,
+    pool: "TrackPool | None" = None,
 ) -> list[Finding]:
     """One Finding per window with frames: the best-scoring binding, verified or not.
 
-    Findings are sorted verified first, then by score.
+    Findings are sorted verified first, then by score. Pass a TrackPool to read the bound tracks afterwards
+    (C8 matches findings to ground truth by their positions).
     """
     # ASSUMPTION A-17: unverified findings are returned too; only the agent's finish tool drops them
     if spec.clarification is not None:
@@ -69,7 +71,10 @@ def verify(
     if track_source is None:
         raise RuntimeError("no track source: the SAM 3.1 client (C3) is not built yet, so pass track_source")
     cfg = cfg or load_verify_config()
-    pool = TrackPool(scene, track_source, cfg)
+    if pool is None:
+        pool = TrackPool(scene, track_source, cfg)
+    elif (pool.scene, pool.source, pool.cfg) != (scene, track_source, cfg):
+        raise ValueError("the TrackPool was built for another scene, track source or config")
     spec_hash = hashlib.sha256(spec.model_dump_json().encode()).hexdigest()[:16]
     findings = []
     for window in windows:
@@ -100,6 +105,13 @@ class TrackPool:
             assocs = associate(self.scene, tracks, self.cfg.association)
             self._cache[key] = [track_motion(self.scene, a, self.cfg.tracks) for a in assocs]
         return self._cache[key]
+
+    def find(self, track_id: str) -> TrackedObject:
+        """A track built so far, by id. Ids are unique within one (concept, class, cameras) entry only."""
+        hits = [o for objs in self._cache.values() for o in objs if o.track.track_id == track_id]
+        if len(hits) != 1:
+            raise KeyError(f"{track_id}: {len(hits)} tracks with this id in the pool")
+        return hits[0]
 
 
 def _concept_for(spec: ScenarioSpec, cls: str) -> str:

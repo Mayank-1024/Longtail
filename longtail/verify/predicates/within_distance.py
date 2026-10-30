@@ -3,7 +3,6 @@
 from typing import Any
 
 from longtail.geometry.tracks3d import TrackedObject
-from longtail.verify.predicates import exists
 from longtail.verify.predicates.base import Context, FrameResult, Reason, horizontal_range, sample_at
 
 
@@ -15,7 +14,7 @@ def evaluate(ctx: Context, objs: list[TrackedObject], args: dict[str, Any]) -> l
     [obj] = objs
     limit = float(args["m"]) + ctx.cfg.predicates.within_distance.tolerance_m
     out = []
-    for ts, ex in zip(ctx.frames, exists.evaluate(ctx, objs, {}), strict=True):
+    for ts, ex in zip(ctx.frames, ctx.evaluate("exists", objs, {}), strict=True):
         if ex.status != "PASS":
             out.append(FrameResult.unverifiable(Reason.REQUIRES_EXISTS, exists=ex.reason.value))
             continue
