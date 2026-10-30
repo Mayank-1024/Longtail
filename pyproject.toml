@@ -15,6 +15,7 @@ dependencies = [
     "pyyaml>=6.0.3",
     # ASSUMPTION A-109: Meta's meta-sam-parser (SAM License, not open source) as a dependency, never vendored
     "meta-sam-parser>=0.0.6",
+    "matplotlib>=3.11.2",
 ]
 
 [project.scripts]

@@ -740,6 +740,7 @@ class ScoredFinding(BaseModel):
     t1: float
     score: float
     actors: dict[str, ActorTrace | None]  # None: the actor is unbound
+    key: str = ""  # identity of the bound objects, so duplicates from overlapping windows can merge
 
 
 def scored_finding(finding: Finding, pool: TrackPool) -> ScoredFinding:
@@ -763,6 +764,7 @@ def scored_finding(finding: Finding, pool: TrackPool) -> ScoredFinding:
         t1=finding.t1,
         score=finding.score,
         actors=actors,
+        key="|".join(f"{k}={v}" for k, v in sorted(finding.bindings.items())),
     )
 
 

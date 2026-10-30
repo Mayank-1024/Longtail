@@ -106,6 +106,10 @@ class TrackPool:
             self._cache[key] = [track_motion(self.scene, a, self.cfg.tracks) for a in assocs]
         return self._cache[key]
 
+    def items(self) -> list[tuple[tuple[str, str, tuple[str, ...]], list[TrackedObject]]]:
+        """Every (concept, class, cameras) built so far, with its tracks."""
+        return list(self._cache.items())
+
     def find(self, track_id: str) -> TrackedObject:
         """A track built so far, by id. Ids are unique within one (concept, class, cameras) entry only."""
         hits = [o for objs in self._cache.values() for o in objs if o.track.track_id == track_id]

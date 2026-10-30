@@ -133,6 +133,34 @@ Synthetic only (the scene's true boxes as PandaSet-style cuboids). The four synt
 - **"Each bound actor lies within 2 m of the labelled object"**: the configurations without LiDAR (a and b) have no 3D position. They match on box IoU >= 0.3 against the label's projected box instead, A-10's rule (A-127).
 - **Motion from geometry** is circular in one way: the verifier's motion and the ground truth's are the same code. PandaSet labels moving or stopped per frame (`attributes.object_motion` for vehicles and bicycles, `attributes.pedestrian_behavior` for pedestrians), so `motion_source: attribute` is available and `longtail gt motion-report` measures how often the two agree (A-124). On the synthetic scene they agree on all 90 judged frames; the real number needs PandaSet.
 
+## C8: metrics, ablation and breaks
+
+Synthetic only: one 3 s scene and the four synthetic gold specs (dev and held-out together), with a stand-in SAM that returns the true objects (confidence 0.9) plus two confident hallucinations (0.97): a "person" on the wall and a "cyclist" on the empty sky. These numbers test the machinery. With 4 queries the intervals are wide and say nothing about PandaSet.
+
+| Configuration | P@10 | Recall | Catch rate | False rejection | Hallucination rate | Cost / query | Seconds / query |
+|---|---|---|---|---|---|---|---|
+| (b) + SAM | 0.25 [0.00, 0.75] | 0.33 [0.00, 1.00] | n/a (no verifier) | n/a | 0.58 | $0.060 | 0.11 |
+| (c) + LiDAR verification | 1.00 [1.00, 1.00] | 0.67 [0.00, 1.00] | 1.00 [1.00, 1.00] | 0.00 | 0.50 | $0.075 | 1.0 |
+| (c), verifier off | 0.50 | 0.67 | 0.00 | 0.00 | 0.50 | | |
+| (c), calibration 2 degrees + 0.3 m | 0.00 | 0.00 | 1.00 | 0.17 | 0.50 | | |
+| (c), LiDAR 200 ms late | 1.00 | 0.33 | 1.00 | 0.15 | 0.50 | | |
+
+(c) returns nothing for two queries: the cyclist (none exist) and the pedestrian behind the car, whose head alone shows above the roof (too few points for exists). Costs are at list price with a cold cache (A-13): six $0.01 SAM requests per class asked for.
+
+### Breaks
+
+- **Verifier off:** P@10 and the catch rate both drop.
+- **Calibration shift:** P@10 drops to 0: a finding the labels do not support gets verified.
+- **LiDAR 200 ms late: a hole.** Neither P@10 nor the catch rate drops; only recall (0.67 to 0.33). Static objects do not move in the world frame, so their points still land in their masks; the moving crosser's points slip about 0.3 m, and the verifier then fails safe (rejects) rather than verifying something wrong. Real scenes have more moving objects and may behave differently. Re-check on PandaSet.
+
+### Where the plan's C8 spec did not work as written
+
+- **A-10 counts occluded objects as hallucinations.** SAM boxes cover what is visible; a projected cuboid covers the whole object. The pedestrian behind the car has a 9 x 5 px SAM box (its head) with IoU 0.06 against its own label, so its 60 boxes count as false claims. The verifier rejects them, and the catch rate counts that as a catch. If those claims counted as true, the catch rate stays 1.00 (90 of 90) but false rejection rises from 0.00 to 0.29 (60 of 210), by the same counts. A fix would call a claim true when, say, half of its box lies inside a projected cuboid of the class. A-10 is unchanged for now: Chethan's decision.
+- **"Verifier off" is not a Scene perturbation.** It is a flag on configuration (c): every finding counts as verified and every claim as accepted (A-141). The other two breaks are Scene wrappers.
+- **The catch rate needs a verifier.** Configuration (b) runs none, so it reports the hallucination rate instead (A-138). For (a) the verifier checks the baseline's cited boxes, as plan 3.4 says.
+- **Uniform windows overlap** (2 s every 1 s, padded by 1 s), so one event yields a finding per window. Without merging the duplicates (A-137), they would fill the top 10, all but one unmatched.
+- **P@10 with fewer than 10 findings** divides by the number returned (A-134). The plan does not say; dividing by 10 would punish a verifier for returning few, verified findings.
+
 ## C9: visualization export
 
 Per finding (`longtail viz`), measured on the synthetic scene; the second row is sized like PandaSet (an 8 s window, 1920x1080 images, about 76k LiDAR points per sweep), with a plain background in place of photos.
