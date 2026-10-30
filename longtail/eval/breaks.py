@@ -22,8 +22,8 @@ from longtail.geometry.transforms import make_pose
 
 YAW_DEG, SHIFT_M, LIDAR_OFFSET_S = 2.0, 0.3, 0.2
 # A break passes when it lowers any of these; the false-rejection rate is reported alongside.
-JUDGED = ("p_at_10", "catch_rate", "recall")
-COMPARED = ("p_at_10", "catch_rate", "recall", "false_rejection_rate")
+JUDGED = ("precision", "catch_rate", "recall")
+COMPARED = ("precision", "catch_rate", "recall", "p_at_10", "false_rejection_rate")
 
 
 class SceneWrapper(Scene):
@@ -142,7 +142,7 @@ def run_breaks(setup: ablation.Setup, split: str) -> dict:
         s, verifier = broken_setup(name, setup)
         m = summarise(ablation.run_config("c", s, verifier=verifier))
         lowered = {k: _lower(base[k]["value"], m[k]["value"]) for k in COMPARED}
-        # ASSUMPTION A-141: a break passes when P@10, the catch rate or recall drops, and records which did;
+        # ASSUMPTION A-141: a break passes when precision, the catch rate or recall drops, and records which;
         # one that lowers none is a hole in the evaluation
         moved = [k for k in JUDGED if lowered[k]]
         hole = not moved

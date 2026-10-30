@@ -137,15 +137,15 @@ Synthetic only (the scene's true boxes as PandaSet-style cuboids). The four synt
 
 Synthetic only: one 3 s scene and the four synthetic gold specs (dev and held-out together), with a stand-in SAM that returns the true objects (confidence 0.9) plus two confident hallucinations (0.97): a "person" on the wall and a "cyclist" on the empty sky. These numbers test the machinery. With 4 queries the intervals are wide and say nothing about PandaSet. Re-run on 2026-10-30 after the A-10 and P@10 changes.
 
-| Configuration | P@10 | Returned (top 10, mean per query) | Recall | Catch rate | False rejection | Hallucination rate | Cost / query | Seconds / query |
+| Configuration | Precision | Recall | P@10 (returned / 10) | Catch rate | False rejection | Hallucination rate | Cost / query | Seconds / query |
 |---|---|---|---|---|---|---|---|---|
-| (b) + SAM | 0.025 [0.000, 0.075] | 1.0 / 10 | 0.33 [0.00, 1.00] | n/a (no verifier) | n/a | 0.35 | $0.060 | 0.11 |
-| (c) + LiDAR verification | 0.050 [0.000, 0.100] | 0.5 / 10 | 0.67 [0.00, 1.00] | 1.00 [1.00, 1.00] | 0.29 [0.00, 0.48] | 0.30 | $0.075 | 1.0 |
-| (c), verifier off | 0.050 | 1.0 / 10 | 0.67 | 0.00 | 0.00 | 0.30 | | |
-| (c), calibration 2 degrees + 0.3 m | 0.000 | 0.5 / 10 | 0.00 | 1.00 | 0.41 | 0.30 | | |
-| (c), LiDAR 200 ms late | 0.025 | 0.25 / 10 | 0.33 | 1.00 | 0.39 | 0.30 | | |
+| (b) + SAM | 0.25 [0.00, 0.75] | 0.33 [0.00, 1.00] | 0.025 [0.000, 0.075] (1.0) | n/a (no verifier) | n/a | 0.35 | $0.060 | 0.11 |
+| (c) + LiDAR verification | 1.00 [1.00, 1.00] | 0.67 [0.00, 1.00] | 0.050 [0.000, 0.100] (0.5) | 1.00 [1.00, 1.00] | 0.29 [0.00, 0.48] | 0.30 | $0.075 | 1.0 |
+| (c), verifier off | 0.50 | 0.67 | 0.050 (1.0) | 0.00 | 0.00 | 0.30 | | |
+| (c), calibration 2 degrees + 0.3 m | 0.00 | 0.00 | 0.000 (0.5) | 1.00 | 0.41 | 0.30 | | |
+| (c), LiDAR 200 ms late | 1.00 | 0.33 | 0.025 (0.25) | 1.00 | 0.39 | 0.30 | | |
 
-P@10 divides by 10 (A-134). Each query here has at most one positive, so 0.1 is the most any query can score. (c) returns nothing for two queries:
+Precision (correct findings over findings returned, pooled over queries) is the headline next to recall (A-134). P@10 divides by 10 (A-134). Each query here has at most one positive, so 0.1 is the most any query can score. (c) returns nothing for two queries:
 - **The cyclist:** none exist in the scene.
 - **The pedestrian behind the car:** only its head shows above the roof, too few points for exists.
 
@@ -164,18 +164,18 @@ The catch rate is unchanged. The verifier's real cost shows instead: it rejects 
 
 ### Breaks
 
-A break passes when it lowers P@10, the catch rate or recall (A-141). All three pass; `breaks.json` records which metrics each one moved.
+A break passes when it lowers precision, the catch rate or recall (A-141). All three pass; `breaks.json` records which metrics each one moved.
 
-- **Verifier off, moved the catch rate** (1.00 to 0.00). P@10 does not move: the unverified findings rank below the verified hits, and P@10 over 10 counts hits only.
-- **Calibration shift, moved P@10 and recall** (to 0.00). The crossing finding is lost, and a finding the labels do not support gets verified.
-- **LiDAR 200 ms late, moved P@10 and recall. Fails safe: shows up as lost recall** (0.67 to 0.33). Static objects do not move in the world frame, so their points still land in their masks. The moving crosser's points slip about 0.3 m, and the verifier rejects it rather than verifying something wrong. The catch rate stays at 1.00, and P@10 drops only because a lost finding is an empty slot out of 10. Real scenes have more moving objects; re-check on PandaSet.
+- **Verifier off, moved precision and the catch rate.** Precision falls from 1.00 to 0.50: the unverified findings, including the ghosts, come back. The catch rate falls from 1.00 to 0.00. P@10 does not move, because the unverified findings rank below the verified hits.
+- **Calibration shift, moved precision and recall** (both to 0.00). The crossing finding is lost, and a finding the labels do not support gets verified.
+- **LiDAR 200 ms late, moved recall. Fails safe: shows up as lost recall** (0.67 to 0.33). Precision stays at 1.00 and the catch rate at 1.00: nothing wrong is verified and nothing false gets through. Static objects do not move in the world frame, so their points still land in their masks. The moving crosser's points slip about 0.3 m, and the verifier rejects it rather than verifying something wrong. P@10 drops from 0.050 to 0.025 only because the lost finding leaves an empty slot. Real scenes have more moving objects; re-check on PandaSet.
 
 ### Where the plan's C8 spec did not work as written
 
 - **"Verifier off" is not a Scene perturbation.** It is a flag on configuration (c): every finding counts as verified and every claim as accepted (A-141). The other two breaks are Scene wrappers.
 - **The catch rate needs a verifier.** Configuration (b) runs none, so it reports the hallucination rate instead (A-138). For (a) the verifier checks the baseline's cited boxes, as plan 3.4 says.
 - **Uniform windows overlap** (2 s every 1 s, padded by 1 s), so one event yields a finding per window. Without merging the duplicates (A-137), they would fill the top 10, all but one unmatched.
-- **P@10 over 10 is insensitive to false positives** when a query returns 10 or fewer findings and the hits rank first: then it counts hits, like recall capped at 10. Precision among the returned findings is P@10 x 10 / returned, from the two numbers reported side by side.
+- **P@10 over 10 is insensitive to false positives** when a query returns 10 or fewer findings and the hits rank first: then it counts hits, like recall capped at 10. That is why precision over all returned findings is the headline, with P@10 beside it.
 
 ## C9: visualization export
 

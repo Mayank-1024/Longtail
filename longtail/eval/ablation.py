@@ -497,6 +497,7 @@ def results_doc(name: str, outcomes: list[QueryOutcome], setup: Setup, split: st
                 "positives": o.n_positives,
                 "returned": len(o.ranked),
                 "matched": len(o.matched),
+                "precision": len(o.matched) / len(o.ranked) if o.ranked else None,
                 "p_at_10": precision_at_k(o),
                 "returned_top10": returned_top_k(o),
                 "cost_usd": round(o.cost_usd, 6),
@@ -546,7 +547,12 @@ def write_results(doc: dict, out_dir: Path) -> Path:
 # Validated categorical slots 1-4 (dataviz reference palette, light surface); colour follows the
 # configuration.
 COLOURS = {"a": "#2a78d6", "b": "#eb6834", "c": "#1baf7a", "d": "#eda100"}
-CHART_METRICS = (("p_at_10", "P@10"), ("recall", "Recall"), ("catch_rate", "Catch rate"))
+CHART_METRICS = (
+    ("precision", "Precision"),
+    ("recall", "Recall"),
+    ("p_at_10", "P@10"),
+    ("catch_rate", "Catch rate"),
+)
 
 
 def chart(out_dir: Path) -> Path | None:
@@ -564,7 +570,7 @@ def chart(out_dir: Path) -> Path | None:
     if not docs:
         return None
     ink, muted, surface = "#0b0b0b", "#52514e", "#fcfcfb"
-    fig, ax = plt.subplots(figsize=(8, 4.2), dpi=150, facecolor=surface)
+    fig, ax = plt.subplots(figsize=(9, 4.2), dpi=150, facecolor=surface)
     ax.set_facecolor(surface)
     n = len(docs)
     width = 0.8 / n

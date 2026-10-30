@@ -33,6 +33,9 @@ def test_precision_recall_cost_and_time():
     assert M.precision_at_k(c) == 0.0  # nothing returned
     assert M.p_at_10([a, b, c]) == pytest.approx(0.1)
     assert M.returned_top10([a, b, c]) == pytest.approx(4.0)  # (10 + 2 + 0) / 3
+    # ASSUMPTION A-134: precision pools every returned finding: (3 + 1 + 0) / (12 + 2 + 0)
+    assert M.precision([a, b, c]) == pytest.approx(4 / 14)
+    assert M.precision([c]) is None
     assert M.recall([a, b, c]) == pytest.approx(4 / 8)  # pooled: (3 + 1 + 0) / (4 + 1 + 3)
     assert M.cost_per_query([a, b, c]) == pytest.approx(0.2)
     assert M.seconds_per_query([a, b, c]) == pytest.approx(4.0)
@@ -157,6 +160,9 @@ def test_config_b_and_c_run_and_c_beats_b_on_precision(results):
     assert b["p_at_10"]["value"] == pytest.approx(0.025) and b["returned_top10"]["value"] == 1.0
     assert c["p_at_10"]["value"] == pytest.approx(0.05) and c["returned_top10"]["value"] == 0.5
     assert b["recall"]["value"] == pytest.approx(1 / 3) and c["recall"]["value"] == pytest.approx(2 / 3)
+    # Precision: (b) 1 of its 4 findings is correct, (c) both of its 2.
+    assert b["precision"]["value"] == 0.25 and c["precision"]["value"] == 1.0
+    assert c["precision"]["value"] > b["precision"]["value"] and c["p_at_10"]["value"] > b["p_at_10"]["value"]
     assert c["p_at_10"]["value"] > b["p_at_10"]["value"]
     # (b) runs no verifier, so it has a hallucination rate but no catch rate.
     assert b["catch_rate"]["value"] is None and b["hallucination_rate"]["value"] > 0
@@ -253,7 +259,7 @@ def test_results_json_and_chart(setup, results, tmp_path):
     assert doc["thresholds_hash"] == ablation.thresholds_hash(setup.verify_cfg, setup.gt_cfg)
     assert doc["bootstrap"] == {"resamples": 1000, "seed": M.BOOTSTRAP_SEED, "over": "queries"}
     assert doc["metrics"]["p_at_10"]["value"] == pytest.approx(0.05) and len(doc["queries"]) == 4
-    assert doc["metrics"]["returned_top10"]["value"] == 0.5
+    assert doc["metrics"]["returned_top10"]["value"] == 0.5 and doc["metrics"]["precision"]["value"] == 1.0
     assert [q["returned_top10"] for q in doc["queries"]] == [1, 1, 0, 0]
     png = out / "ablation.png"
     assert png.is_file() and png.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n"
@@ -270,7 +276,7 @@ def break_report(setup):
 
 
 def test_each_break_lowers_a_metric(break_report):
-    # ASSUMPTION A-141: a break passes when it lowers P@10, the catch rate or recall
+    # ASSUMPTION A-141: a break passes when it lowers precision, the catch rate or recall
     for name in breaks.BREAKS:
         b = break_report["breaks"][name]
         assert b["passed"] and b["moved"], f"{name} lowered nothing: {b['lowered']}"
@@ -280,16 +286,15 @@ def test_each_break_lowers_a_metric(break_report):
 def test_break_results(break_report):
     moved = {k: v["moved"] for k, v in break_report["breaks"].items()}
     m = {k: v["metrics"] for k, v in break_report["breaks"].items()}
-    # Verifier off: nothing is caught. The unverified findings rank below the verified hits, so P@10 (hits
-    # over 10) does not move.
-    assert moved["verifier_off"] == ["catch_rate"] and m["verifier_off"]["catch_rate"]["value"] == 0.0
-    # Calibration shifted: the crossing finding is lost and a wrong one verified: no hits left.
-    assert moved["calibration_2deg_0.3m"] == ["p_at_10", "recall"]
-    assert m["calibration_2deg_0.3m"]["p_at_10"]["value"] == 0.0
-    # LiDAR 200 ms late: fails safe; one finding is lost (recall, and P@10 counts the empty slot), nothing
-    # wrong is verified and nothing false gets through.
-    assert moved["lidar_offset_200ms"] == ["p_at_10", "recall"]
-    assert m["lidar_offset_200ms"]["catch_rate"]["value"] == 1.0
+    # Verifier off: the unverified ghost findings come back (precision 1.0 to 0.5) and nothing is caught.
+    assert moved["verifier_off"] == ["precision", "catch_rate"]
+    assert m["verifier_off"]["precision"]["value"] == 0.5 and m["verifier_off"]["catch_rate"]["value"] == 0.0
+    # Calibration shifted: the crossing finding is lost and a wrong one verified.
+    assert moved["calibration_2deg_0.3m"] == ["precision", "recall"]
+    assert m["calibration_2deg_0.3m"]["precision"]["value"] == 0.0
+    # LiDAR 200 ms late: fails safe, shows up as lost recall; what it returns is still right.
+    assert moved["lidar_offset_200ms"] == ["recall"]
+    assert m["lidar_offset_200ms"]["precision"]["value"] == 1.0
 
 
 def test_scene_wrappers():

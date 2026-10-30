@@ -99,6 +99,13 @@ def returned_top10(qs: list[QueryOutcome]) -> float | None:
     return float(np.mean([returned_top_k(o) for o in qs])) if qs else None
 
 
+def precision(qs: list[QueryOutcome]) -> float | None:
+    """Correct findings over findings returned, pooled over queries; None when nothing was returned."""
+    # ASSUMPTION A-134: precision pools over queries: matched findings over every finding returned (not only
+    # the top 10); the headline beside recall, with P@10 kept next to it
+    return _ratio(sum(len(o.matched) for o in qs), sum(len(o.ranked) for o in qs))
+
+
 def recall(qs: list[QueryOutcome]) -> float | None:
     # ASSUMPTION A-134: recall pools over queries: matched positives over all ground-truth positives
     return _ratio(sum(len(o.matched) for o in qs), sum(o.n_positives for o in qs))
@@ -128,9 +135,10 @@ def hallucination_rate(qs: list[QueryOutcome]) -> float | None:
 
 
 METRICS: dict[str, Callable[[list[QueryOutcome]], float | None]] = {
+    "precision": precision,
+    "recall": recall,
     "p_at_10": p_at_10,
     "returned_top10": returned_top10,
-    "recall": recall,
     "cost_per_query_usd": cost_per_query,
     "seconds_per_query": seconds_per_query,
     "catch_rate": catch_rate,
