@@ -15,7 +15,7 @@ Everything below is tested on a synthetic scene only (`tests/synthetic.py`); Pan
 | C4 Mask to LiDAR | Done | `c/c4-association` | [#4](https://github.com/Mayank-1024/longtail/pull/4) | Clusters, ground (incl. slopes), visibility filter, merging, frustum and box-only | 17 of 20 real SAM masks correct by eye (needs C3) |
 | C5 Tracks and ego path | Done | `c/c5-tracks` | [#5](https://github.com/Mayank-1024/longtail/pull/5) | Speeds, gaps, ego motion cancelling, corridor (straight, arc, stopped) | Parked car on a real scene under 0.3 m/s; corridor on the bird's-eye export |
 | C6 Verifier | Done | `c/c6-verifier` | [#6](https://github.com/Mayank-1024/longtail/pull/6) | PASS, FAIL and UNVERIFIABLE for all 10 predicates; binding, pruning, cap | Thresholds on PandaSet and tuning on development queries |
-| C7 Ground truth | Done on synthetic (draft) | `c/c7-gt` | C7_PR | Four synthetic gold specs (crossing, parked car, pedestrian hidden by a car, zero-positive cyclist); sibling dedup; 3 s horizon; event merging; one-to-one matching at IoU 0.3; label guard; the verifier's crossing finding matches its positive; `longtail gt build`, `spotcheck`, `motion-report` | Your 25 queries and gold specs (M7); `longtail gt build` on 30 scenes; 5 positives checked by eye; geometry vs attribute motion agreement; sibling uuids (A-16) |
+| C7 Ground truth | Done on synthetic (draft) | `c/c7-gt` | [#10](https://github.com/Mayank-1024/longtail/pull/10) | Four synthetic gold specs (crossing, parked car, pedestrian hidden by a car, zero-positive cyclist); sibling dedup; 3 s horizon; event merging; one-to-one matching at IoU 0.3; label guard; the verifier's crossing finding matches its positive; `longtail gt build`, `spotcheck`, `motion-report` | Your 25 queries and gold specs (M7); `longtail gt build` on 30 scenes; 5 positives checked by eye; geometry vs attribute motion agreement; sibling uuids (A-16) |
 | C8 Metrics, ablation, breaks | Not started | | | | Needs C7 and the VLM baseline (M5) |
 | C9 Visualization export | Done | `c/c9-viz` | [#7](https://github.com/Mayank-1024/longtail/pull/7) | Overlays, bird's-eye JSON, timeline, manifest, schema, CLI | Overlays on real photos; real export size and time |
 | C10 Fresh-clone test | Not started (Nov 4) | | | | |
@@ -144,7 +144,7 @@ Generate TypeScript from `$defs` (`VizManifest`, `BevExport`, `Timeline`). Drive
 
 ## d. How to review and merge
 
-1. **Order:** #3 (C2), #4 (C4), #5 (C5), #6 (C6), #7 (C9), #9 (C3), then C7 (#1, #2 and #8 are merged). Each stacked PR targets the branch below it, so its diff shows only its own task.
+1. **Order:** #3 (C2), #4 (C4), #5 (C5), #6 (C6), #7 (C9), #9 (C3), #10 (C7) (#1, #2 and #8 are merged). Each stacked PR targets the branch below it, so its diff shows only its own task.
 2. Read each PR's "For Mayank" section first; that is what touches your side.
 3. Merge bottom-up with **"Create a merge commit"**, not squash. Squashing rewrites the commits the PRs above it are built on, and their diffs fill with already-merged changes.
 4. After each merge, check that the next PR's base is now `main`. GitHub usually retargets it when the merged branch is deleted; if not, change the base by hand (Edit, next to the title).
