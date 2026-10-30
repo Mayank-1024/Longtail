@@ -16,7 +16,7 @@ Everything below is tested on a synthetic scene only (`tests/synthetic.py`); Pan
 | C5 Tracks and ego path | Done | `c/c5-tracks` | [#5](https://github.com/Mayank-1024/longtail/pull/5) | Speeds, gaps, ego motion cancelling, corridor (straight, arc, stopped) | Parked car on a real scene under 0.3 m/s; corridor on the bird's-eye export |
 | C6 Verifier | Done | `c/c6-verifier` | [#6](https://github.com/Mayank-1024/longtail/pull/6) | PASS, FAIL and UNVERIFIABLE for all 10 predicates; binding, pruning, cap | Thresholds on PandaSet and tuning on development queries |
 | C7 Ground truth | Done on synthetic (draft) | `c/c7-gt` | [#10](https://github.com/Mayank-1024/longtail/pull/10) | Four synthetic gold specs (crossing, parked car, pedestrian hidden by a car, zero-positive cyclist); sibling dedup; 3 s horizon; event merging; one-to-one matching at IoU 0.3; label guard; the verifier's crossing finding matches its positive; `longtail gt build`, `spotcheck`, `motion-report` | Your 25 queries and gold specs (M7); `longtail gt build` on 30 scenes; 5 positives checked by eye; geometry vs attribute motion agreement; sibling uuids (A-16) |
-| C8 Metrics, ablation, breaks | Done on synthetic (draft) | `c/c8-metrics` | C8_PR | Metrics on hand-computed cases; deterministic bootstrap; catch and false-rejection rates; (b) and (c) on the synthetic scene ((c) P@10 1.00 vs (b) 0.25); each break lowers a metric; (a) and (d) adapters on sample files and clear "waiting on M4/M5" errors; results JSON and chart | Held-out run on Nov 3 from `eval-final`; (a) needs your M5 files, (d) your M4 file (`docs/eval-formats.md`); A-10 modal-box problem (see eval report) |
+| C8 Metrics, ablation, breaks | Done on synthetic (draft) | `c/c8-metrics` | [#11](https://github.com/Mayank-1024/longtail/pull/11) | Metrics on hand-computed cases; deterministic bootstrap; catch and false-rejection rates; (b) and (c) on the synthetic scene ((c) P@10 1.00 vs (b) 0.25); each break lowers a metric; (a) and (d) adapters on sample files and clear "waiting on M4/M5" errors; results JSON and chart | Held-out run on Nov 3 from `eval-final`; (a) needs your M5 files, (d) your M4 file (`docs/eval-formats.md`); A-10 modal-box problem (see eval report) |
 | C9 Visualization export | Done | `c/c9-viz` | [#7](https://github.com/Mayank-1024/longtail/pull/7) | Overlays, bird's-eye JSON, timeline, manifest, schema, CLI | Overlays on real photos; real export size and time |
 | C10 Fresh-clone test | Not started (Nov 4) | | | | |
 
@@ -156,7 +156,7 @@ Generate TypeScript from `$defs` (`VizManifest`, `BevExport`, `Timeline`). Drive
 
 ## d. How to review and merge
 
-1. **Order:** #3 (C2), #4 (C4), #5 (C5), #6 (C6), #7 (C9), #9 (C3), #10 (C7), C8_PR (C8) (#1, #2 and #8 are merged). Each stacked PR targets the branch below it, so its diff shows only its own task.
+1. **Order:** #3 (C2), #4 (C4), #5 (C5), #6 (C6), #7 (C9), #9 (C3), #10 (C7), #11 (C8) (#1, #2 and #8 are merged). Each stacked PR targets the branch below it, so its diff shows only its own task.
 2. Read each PR's "For Mayank" section first; that is what touches your side.
 3. Merge bottom-up with **"Create a merge commit"**, not squash. Squashing rewrites the commits the PRs above it are built on, and their diffs fill with already-merged changes.
 4. After each merge, check that the next PR's base is now `main`. GitHub usually retargets it when the merged branch is deleted; if not, change the base by hand (Edit, next to the title).
