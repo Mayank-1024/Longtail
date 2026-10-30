@@ -26,3 +26,5 @@ Dataset labels are evaluation ground truth. Never read them outside `with eval_g
 ## Status files
 
 Each of us keeps a `docs/status-<name>.md`, updated at the end of every task on that task's branch. Mayank: a matching `docs/status-mayank.md` is suggested.
+
+The status file on `main` is the source of truth, and is updated through docs-only PRs against `main`. On a merge conflict in a status file, keep `main`'s version.
