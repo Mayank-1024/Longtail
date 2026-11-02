@@ -15,7 +15,8 @@ No paid call has been made: the Meta account is being verified and the credits a
 | M3 Pipeline and agent | Done, offline | `m/m3-agent` | Linear `pipeline.run` on uniform windows (Glimmer cut, A-213), parallel scenes, a failing scene isolated; `SearchAgent`: plan, then list_scenes / search_scenes / finish on Wonder, budget and 6-step stop rule, auto-finish, finish drops unverified findings, trace saved to `runs/search-<id>/search.json`; end to end on the synthetic scene with the real verifier | Real track source (C3 merge); live run once the key works |
 | M5 Cards and baseline (a) | Done, offline | `m/m5-cards` | Baseten transport (chat completions) behind the same gates; card validator (citations, no FAIL or UNVERIFIABLE stated as fact, numbers match evidence, title); one retry, then a template that always passes; baseline (a): 2 s windows, 3x2 tiles, claims in full-image pixels, matching, C8's `runs/baseline_a/` files (checked with C8's `load_baseline`) | Live: 10 cards through the validator; baseline output for every window (needs the Baseten key and `LONGTAIL_ALLOW_PAID=1`) |
 | M4 Glimmer | Cut (A-213) | | | |
-| M6 to M10 | Not started | | | |
+| M6 Web view | Done, offline | `m/m6-web` | FastAPI (`api/server.py`): searches with a live SSE trace, finding detail with C9 overlays / bird's-eye view / timeline exported on first view, cards, approve and reject, JSON and CSV export; React + Vite (`web/`): search, live trace, verified / rejected / trace tabs, detail with six cameras, scrubber, bird's-eye SVG, per-sweep predicate strip. Tested end to end in offline-demo mode (synthetic scenes, scripted model, real verifier and export) and in a headless browser with no console errors | Live and replay modes on real scenes (needs data, C3 and keys) |
+| M7 to M10 | M7 done (#14); M8 to M10 not started | | | |
 
 ## b. For Chethan
 

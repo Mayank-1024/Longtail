@@ -81,8 +81,12 @@ def spec_run_id(spec: ScenarioSpec) -> str:
     return hashlib.sha256(spec.model_dump_json().encode()).hexdigest()[:12]
 
 
+def scene_run_dir(spec: ScenarioSpec, scene_id: str, run_root: Path) -> Path:
+    return Path(run_root) / f"{spec_run_id(spec)}-{scene_id}"
+
+
 def search_scene(spec: ScenarioSpec, scene: Scene, track_source: TrackSource, run_root: Path) -> VerifyRun:
-    run_dir = Path(run_root) / f"{spec_run_id(spec)}-{scene.scene_id}"
+    run_dir = scene_run_dir(spec, scene.scene_id, run_root)
     return verify_and_record(spec, uniform_windows(scene), scene, track_source, run_dir)
 
 

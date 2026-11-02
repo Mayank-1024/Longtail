@@ -13,6 +13,7 @@ finish automatically with every verified finding found so far, so a search alway
 import json
 import os
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -21,7 +22,7 @@ from longtail.agent.planner import DEFAULT_MODEL, plan
 from longtail.contracts import Finding, ScenarioSpec
 from longtail.data.base import Scene
 from longtail.llm.client import Budget, BudgetExceeded, ModelClient
-from longtail.pipeline import PipelineResult, SceneOpener, SceneResult, run, spec_run_id
+from longtail.pipeline import PipelineResult, SceneOpener, SceneResult, run, scene_run_dir, spec_run_id
 from longtail.verify.engine import TrackSource
 
 # ASSUMPTION A-215: the orchestrator runs on the planner's model (Wonder) with at most 6 model calls per query
@@ -92,9 +93,12 @@ class SearchResult:
     usd: float
     trace: list[TraceEvent]
     scenes_searched: list[str]
+    search_id: str = ""
+    run_dirs: dict[str, str] = field(default_factory=dict)  # scene id to its verify run, relative to run_root
 
     def to_json(self) -> dict[str, Any]:
         return {
+            "search_id": self.search_id,
             "query": self.query,
             "spec": self.spec.model_dump(mode="json"),
             "findings": [f.model_dump(mode="json") for f in self.findings],
@@ -103,6 +107,7 @@ class SearchResult:
             "stop_reason": self.stop_reason,
             "usd": round(self.usd, 6),
             "scenes_searched": self.scenes_searched,
+            "run_dirs": self.run_dirs,
             "trace": [e.__dict__ for e in self.trace],
         }
 
@@ -145,24 +150,32 @@ class SearchAgent:
         model: str | None = None,
         max_steps: int = MAX_STEPS,
         scene_meta: dict[str, dict[str, Any]] | None = None,
+        on_event: Callable[[TraceEvent], None] | None = None,
     ) -> None:
         self.client, self.scene_ids, self.open_scene = client, list(scene_ids), open_scene
         self.track_source, self.run_root, self.model = track_source, Path(run_root), model
         self.max_steps, self.scene_meta = max_steps, scene_meta or {}
+        self.on_event = on_event
+
+    def _log(self, trace: list[TraceEvent], event: TraceEvent) -> None:
+        trace.append(event)
+        if self.on_event is not None:
+            self.on_event(event)
 
     def search(self, query: str, budget: Budget | None = None) -> SearchResult:
         budget = budget or Budget.from_env()
         trace: list[TraceEvent] = []
         planned = plan(query, self.client, model=self.model, budget=budget)
         spec = planned.spec
-        trace.append(
+        self._log(
+            trace,
             TraceEvent(
                 0,
                 "plan",
                 "planner",
                 {"spec": spec.model_dump(mode="json"), "attempts": planned.attempts},
                 planned.usd,
-            )
+            ),
         )
         if spec.clarification is not None:
             return self._done(query, spec, {}, [], "", "clarification", budget, trace, [])
@@ -184,13 +197,14 @@ class SearchAgent:
             try:
                 resp = self.client.respond(request, purpose="orchestrator", budget=budget)
             except BudgetExceeded as e:
-                trace.append(TraceEvent(step, "stop", "budget", {"error": str(e)}))
+                self._log(trace, TraceEvent(step, "stop", "budget", {"error": str(e)}))
                 return self._auto_finish(query, spec, found, searched, "budget", budget, trace)
             calls = resp.function_calls()
-            trace.append(
+            self._log(
+                trace,
                 TraceEvent(
                     step, "model", "orchestrator", {"tool_calls": [c.get("name") for c in calls]}, resp.usd
-                )
+                ),
             )
             history += resp.output
             if not calls:
@@ -204,7 +218,7 @@ class SearchAgent:
                     args = None
                 if name == "finish" and isinstance(args, dict):
                     ids = [i for i in args.get("finding_ids", []) if isinstance(i, str)]
-                    trace.append(TraceEvent(step, "tool", "finish", {"finding_ids": ids}))
+                    self._log(trace, TraceEvent(step, "tool", "finish", {"finding_ids": ids}))
                     return self._done(
                         query,
                         spec,
@@ -224,7 +238,7 @@ class SearchAgent:
                         "output": json.dumps(output),
                     }
                 )
-        trace.append(TraceEvent(self.max_steps, "stop", "max_steps", {}))
+        self._log(trace, TraceEvent(self.max_steps, "stop", "max_steps", {}))
         return self._auto_finish(query, spec, found, searched, "max_steps", budget, trace)
 
     def _run_tool(self, name, args, spec, found, searched, step, trace) -> dict[str, Any]:
@@ -248,7 +262,7 @@ class SearchAgent:
             }
         else:
             out = {"error": f"unknown tool {name!r}"}
-        trace.append(TraceEvent(step, "tool", str(name), {"args": args, "result": out}))
+        self._log(trace, TraceEvent(step, "tool", str(name), {"args": args, "result": out}))
         return out
 
     def _auto_finish(self, query, spec, found, searched, reason, budget, trace) -> SearchResult:
@@ -262,12 +276,24 @@ class SearchAgent:
         chosen = [found[i] for i in dict.fromkeys(ids) if i in found and found[i].verified]
         dropped = [i for i in ids if i not in found or not found[i].verified]
         if dropped:
-            trace.append(TraceEvent(len(trace), "stop", "finish_dropped", {"finding_ids": dropped}))
+            self._log(trace, TraceEvent(len(trace), "stop", "finish_dropped", {"finding_ids": dropped}))
         rejected = sorted((f for f in found.values() if not f.verified), key=lambda f: -f.score)
+        search_id = f"search-{spec_run_id(spec)}"
+        run_dirs = {sid: scene_run_dir(spec, sid, Path(".")).as_posix() for sid in searched}
         result = SearchResult(
-            query, spec, chosen, rejected, summary, reason, budget.spent_usd, trace, list(searched)
+            query,
+            spec,
+            chosen,
+            rejected,
+            summary,
+            reason,
+            budget.spent_usd,
+            trace,
+            list(searched),
+            search_id,
+            run_dirs,
         )
-        out = self.run_root / f"search-{spec_run_id(spec)}"
+        out = self.run_root / search_id
         out.mkdir(parents=True, exist_ok=True)
         (out / "search.json").write_text(json.dumps(result.to_json(), indent=1, default=str))
         return result

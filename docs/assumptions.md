@@ -140,5 +140,7 @@ Choices the build plan does not fix, made before the contracts session so work c
 | A-221 | Baseline (a) windows are 2 s with no overlap, one keyframe per second, as a 3x2 tile with 640 px cells. | both | ASSUMED | `longtail/eval/baseline_vlm.py` |
 | A-222 | Baseline matching sends at most 40 window descriptions per call; scores are clamped to [0, 1]; a match keeps only claims of its own window. | M | ASSUMED | `longtail/eval/baseline_vlm.py` |
 | A-223 | Describing windows is shared by all queries, so each query's `cost_usd` and `seconds` carry an equal share of it on top of its own matching calls. | both | ASSUMED | `longtail/eval/baseline_vlm.py` |
+| A-224 | The web view's offline-demo mode uses synthetic scenes and a scripted model (api/demo.py) with a banner on every page; it is for building the UI only, never for footage, numbers or claims. | M | ASSUMED | `api/demo.py` |
+| A-225 | A finding's visual export (C9) runs on its first detail view, for every finding of that scene's run at once, and is reused afterwards. | M | ASSUMED | `api/server.py` |
 
 IDs A-201 and up are Mayank's, so they never collide with Chethan's IDs on open branches.
