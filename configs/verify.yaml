@@ -52,3 +52,30 @@ association:
     # ASSUMPTION A-56: same-camera fragments: extrapolate over gaps up to this long, velocity from this window
     fragment_max_gap_s: 1.0
     fragment_velocity_window_s: 1.0
+
+tracks:
+  # Plan C5: Savitzky-Golay smoothing of world centroids, window 5 samples.
+  savgol_window: 5
+  # ASSUMPTION A-66: quadratic Savitzky-Golay fit; speed is horizontal (world x, y)
+  savgol_polyorder: 2
+  # ASSUMPTION A-67: gaps up to this are interpolated, longer ones split the speed series, C4 skips included
+  max_interp_gap_s: 0.3
+  # ASSUMPTION A-68: the position used for speed: "median" (C4's sample) or "box_centre" (L-shape fit)
+  position: box_centre
+  lshape_angle_step_deg: 1.0
+  lshape_min_distance_m: 0.01
+  # ASSUMPTION A-73: an end of the box is truncated when its points touch the image border or sit next to nearer
+  # points; the distances grow with the cluster's point spacing in pixels
+  edge_band_m: 0.15
+  truncation_border_px: 4
+  occluder_radius_px: 4
+  occluder_margin_m: 0.5
+  # The border and occluder distances grow to this many times the cluster's median point spacing in pixels.
+  spacing_factor: 1.5
+
+ego_path:
+  # Plan C5: the ego's actual path over the next 3 s, as a corridor of half-width 1.5 m.
+  horizon_s: 3.0
+  half_width_m: 1.5
+  # ASSUMPTION A-69: the corridor reaches at least this far, extended straight ahead when the ego is slow
+  min_length_m: 10.0

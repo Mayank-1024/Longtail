@@ -278,6 +278,21 @@ def test_cars_parked_nose_to_tail_stay_apart():
     assert sorted(r.track.sources for r in apart) == [[("front_left_camera", 1)], [("left_camera", 2)]]
 
 
+def test_long_object_split_by_the_cameras_merges_on_shared_points():
+    # ASSUMPTION A-74: partial views of a 4.5 m car have centroids over 1 m apart but share LiDAR points
+    from synthetic import close_pass_config
+
+    s = SyntheticScene(close_pass_config())
+    cams = ["front_camera", "front_right_camera", "right_camera"]
+    tracks = [(object_track2d(s, "pass_car", c, obj_id=k), "car") for k, c in enumerate(cams)]
+    merged = sorted([c for c, _ in r.track.sources] for r in associate(s, tracks))
+    # Front-right and right share 50-100% of the smaller cluster; front and front-right 21-28% (the synthetic
+    # cameras overlap by about 5 degrees). Both clear the 15% floor, so all three views are one car.
+    assert merged == [cams]
+    without = _cfg(merge={"min_shared_points": 10**9})
+    assert len(associate(s, tracks, without)) == 3
+
+
 def test_different_classes_or_far_tracks_do_not_merge():
     s = SyntheticScene(SyntheticConfig(n_frames=40))
     front = object_track2d(s, "crosser", "front_camera", obj_id=4)
