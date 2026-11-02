@@ -30,6 +30,8 @@ BASE_URL = "https://api.meta.ai/v1"
 TOKEN_PRICES_PER_M: dict[str, tuple[float, float]] = {
     "muse-wonder-1.0": (4.00, 20.00),
     "muse-spark-1.3": (1.25, 4.25),
+    # ASSUMPTION A-217: Spark Open on Baseten priced at a placeholder upper bound until the price is checked
+    "meta-models/muse-spark-open-1026": (1.00, 3.00),
 }
 SAM_USD_PER_FRAME = 0.20 / 1000
 SAM_MIN_BILLED_FRAMES = 50

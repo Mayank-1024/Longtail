@@ -133,5 +133,12 @@ Choices the build plan does not fix, made before the contracts session so work c
 | A-214 | Scenes are searched by up to 4 worker threads, one scene per worker; a failing scene is reported with its error and never stops the others. | M | ASSUMED | `longtail/pipeline.py` |
 | A-215 | The orchestrator runs on the planner's model (Wonder) with at most 6 model calls per query; after that, or when the budget runs out, it finishes with every verified finding. | M | ASSUMED | `longtail/agent/orchestrator.py` |
 | A-216 | A `search_scenes` result shows the model at most 5 findings per scene, verified first, with the failing predicates and reasons. | M | ASSUMED | `longtail/agent/orchestrator.py` |
+| A-217 | Spark Open on Baseten is priced at a placeholder upper bound of $1 / $3 per 1M tokens until Baseten's price is checked; the spend cap counts it with the Meta spend. | M | ASSUMED | `longtail/llm/client.py` |
+| A-218 | The Spark Open model slug on Baseten is `meta-models/muse-spark-open-1026` (plan 3), called through OpenAI-compatible chat completions. VERIFY on the first call. | M | ASSUMED | `longtail/llm/baseten.py` |
+| A-219 | A sentence citing a FAIL or UNVERIFIABLE result must contain a hedge phrase ("could not", "failed", "not verified", ...); otherwise the card is rejected. | M | ASSUMED | `longtail/explain/validate.py` |
+| A-220 | A card has at most 4 sentences and is written from at most 3 keyframe images. | M | ASSUMED | `longtail/explain/cards.py` |
+| A-221 | Baseline (a) windows are 2 s with no overlap, one keyframe per second, as a 3x2 tile with 640 px cells. | both | ASSUMED | `longtail/eval/baseline_vlm.py` |
+| A-222 | Baseline matching sends at most 40 window descriptions per call; scores are clamped to [0, 1]; a match keeps only claims of its own window. | M | ASSUMED | `longtail/eval/baseline_vlm.py` |
+| A-223 | Describing windows is shared by all queries, so each query's `cost_usd` and `seconds` carry an equal share of it on top of its own matching calls. | both | ASSUMED | `longtail/eval/baseline_vlm.py` |
 
 IDs A-201 and up are Mayank's, so they never collide with Chethan's IDs on open branches.

@@ -13,7 +13,9 @@ No paid call has been made: the Meta account is being verified and the credits a
 | M2 Planner | Done, offline | `m/m1-client` | All 25 gold specs parse; retry with the error sent back; missing `exists` caught; clarification path | Live golden test on the 10 dev queries (`tests/test_planner.py`, skipped without a key) |
 | M7 Queries and gold specs | Done | `m/m7-queries` (PR #14) | All 25 validate; C7's `load_queries` reads them | Zero-positive check with `longtail gt build` once PandaSet is down; freeze by Nov 3, 6 PM |
 | M3 Pipeline and agent | Done, offline | `m/m3-agent` | Linear `pipeline.run` on uniform windows (Glimmer cut, A-213), parallel scenes, a failing scene isolated; `SearchAgent`: plan, then list_scenes / search_scenes / finish on Wonder, budget and 6-step stop rule, auto-finish, finish drops unverified findings, trace saved to `runs/search-<id>/search.json`; end to end on the synthetic scene with the real verifier | Real track source (C3 merge); live run once the key works |
-| M4 to M10 | Not started (M4 Glimmer cut) | | | |
+| M5 Cards and baseline (a) | Done, offline | `m/m5-cards` | Baseten transport (chat completions) behind the same gates; card validator (citations, no FAIL or UNVERIFIABLE stated as fact, numbers match evidence, title); one retry, then a template that always passes; baseline (a): 2 s windows, 3x2 tiles, claims in full-image pixels, matching, C8's `runs/baseline_a/` files (checked with C8's `load_baseline`) | Live: 10 cards through the validator; baseline output for every window (needs the Baseten key and `LONGTAIL_ALLOW_PAID=1`) |
+| M4 Glimmer | Cut (A-213) | | | |
+| M6 to M10 | Not started | | | |
 
 ## b. For Chethan
 
