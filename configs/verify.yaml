@@ -79,3 +79,47 @@ ego_path:
   half_width_m: 1.5
   # ASSUMPTION A-69: the corridor reaches at least this far, extended straight ahead when the ego is slow
   min_length_m: 10.0
+
+predicates:
+  exists:
+    # Plan C6: a foreground cluster of at least 15 points (5 beyond 40 m) fitting the class size prior;
+    # UNVERIFIABLE beyond 60 m.
+    min_points: 15
+    min_points_far: 5
+    far_m: 40.0
+    max_range_m: 60.0
+    # ASSUMPTION A-76: size priors; the plan gives only the pedestrian's. Footprint bounds the longest horizontal
+    # side and caps the shorter one; lower bounds are loose because clusters are visible surfaces only
+    size_priors:
+      pedestrian: {height_m: [1.0, 2.1], footprint_m: [0.3, 1.2], typical_height_m: 1.7}
+      cyclist: {height_m: [1.0, 2.2], footprint_m: [0.3, 2.2], typical_height_m: 1.7}
+      car: {height_m: [1.1, 2.3], footprint_m: [0.8, 5.8], typical_height_m: 1.5}
+      truck: {height_m: [1.6, 4.5], footprint_m: [1.0, 13.0], typical_height_m: 3.0}
+      bus: {height_m: [2.4, 4.5], footprint_m: [1.0, 18.5], typical_height_m: 3.2}
+  within_distance:
+    # Plan C6: median range from the ego at most m, with this tolerance.
+    tolerance_m: 0.5
+  motion:
+    # Plan C6: above 0.5 m/s (or below 0.3 m/s) for at least 1 s, with hysteresis between the two.
+    moving_mps: 0.5
+    stopped_mps: 0.3
+    window_s: 1.0
+    # ASSUMPTION A-77: a step whose implied acceleration exceeds this is a jump in the position, not motion
+    max_accel_mps2: 10.0
+  crossing:
+    # Plan C6: enters the ego corridor 0 to 30 m ahead within 3 s (the corridor's horizon_s), with lateral speed
+    # toward it above this.
+    max_ahead_m: 30.0
+    min_lateral_mps: 0.3
+  relative_position:
+    # Plan C6: on the stated side for at least half of the window.
+    # ASSUMPTION A-78: "the window" is a 1 s window centred on each frame
+    window_s: 1.0
+    min_frac: 0.5
+  occluded_by:
+    # Plan C6: a nearer cluster of class cls covers at least 20% of the target's projected box.
+    min_cover_frac: 0.2
+
+engine:
+  # Plan C6: every combination of candidate tracks is tried, up to this many.
+  max_bindings: 200

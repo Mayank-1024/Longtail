@@ -524,3 +524,20 @@ def close_pass_config(**overrides) -> SyntheticConfig:
 def stopped_ego_config(**overrides) -> SyntheticConfig:
     """The ego stands still (a red light); everything else as the default scene."""
     return SyntheticConfig(**{"ego_speed_mps": 0.0, **overrides})
+
+
+def track_source(scene: SyntheticScene, objects: dict, extra: dict | None = None, dilate_px: int = 0):
+    """A TrackSource for the verifier (stand-in for C3's SAM client).
+
+    objects maps a concept to synthetic object names; extra maps a concept to ready-made Track2Ds.
+    """
+
+    def source(_scene, camera: str, concept: str):
+        out = []
+        for k, name in enumerate(objects.get(concept, [])):
+            t = object_track2d(scene, name, camera, concept=concept, obj_id=k + 1, dilate_px=dilate_px)
+            if t.frames:
+                out.append(t)
+        return out + [t for t in (extra or {}).get(concept, []) if t.camera == camera]
+
+    return source
