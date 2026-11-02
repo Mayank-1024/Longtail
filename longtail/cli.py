@@ -5,6 +5,7 @@
 import argparse
 import sys
 
+from longtail.agent import cli as agent_cli
 from longtail.data import cli as data_cli
 from longtail.viz import cli as viz_cli
 
@@ -13,6 +14,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="longtail")
     sub = parser.add_subparsers(dest="command", required=True)
     data_cli.register(sub)
+    agent_cli.register(sub)
     # ASSUMPTION A-103: `longtail viz` is registered here, in the shared dispatcher (A-34)
     viz_cli.register(sub)
     args = parser.parse_args(argv)

@@ -117,3 +117,17 @@ Choices the build plan does not fix, made before the contracts session so work c
 | A-106 | The timeline covers the finding's whole candidate window (`in_interval` marks [t0, t1]); overlays and the bird's-eye view cover [t0, t1] only. `NOT_JUDGED` is in the schema for frames without a verdict and does not occur with the current engine. | both | ASSUMED | `longtail/viz/export.py`, `tests/test_viz.py` |
 | A-107 | The bird's-eye view shows the finding's bound tracks only; a track's position is C4's median (on the near face), its box the C5 fit converted to the ego frame, its velocity the world velocity in ego axes. | both | ASSUMED | `longtail/viz/export.py` |
 | A-108 | Overlay style: actor colours in actor order (cyan, magenta, green, orange, violet), masks at 35% opacity, cluster points as 3 px dots in the actor colour, mask-backed boxes solid, box-only claims dashed yellow and labelled "VLM claim", LiDAR coloured by depth (red near to blue at 50 m), a VERIFIED or REJECTED header with up to two failing reason codes. | C | ASSUMED | `longtail/viz/export.py`, `tests/test_viz.py` |
+| A-201 | One cost ledger for every model call at `runs/ledger.jsonl` (same line shape as C3's A-116); a cache hit is logged at $0. | both | ASSUMED | `longtail/llm/ledger.py` |
+| A-202 | The M1 response cache lives under `$LONGTAIL_CACHE_DIR/llm` (default `./cache`), next to C3's cache (A-112). | both | ASSUMED | `longtail/llm/cache.py` |
+| A-203 | Model ids `muse-wonder-1.0`, `muse-spark-1.3`, `sam-3.1`, priced per plan section 3 (Wonder $4/$20, Spark $1.25/$4.25 per 1M tokens; SAM $0.20 per 1,000 frames, 50-frame minimum). VERIFY the ids on the first paid call. | M | ASSUMED | `longtail/llm/client.py` |
+| A-204 | Retries: up to 4, backoff 1, 2, 4, 8 s, on 429 and 5xx only; never on 400 (matches A-115). | both | ASSUMED | `longtail/llm/client.py` |
+| A-205 | Pre-call cost estimate: request characters / 4 as input tokens plus `max_output_tokens` (default 4,096) as output; used for the budget and cap checks. | M | ASSUMED | `longtail/llm/client.py` |
+| A-206 | Paid calls need `LONGTAIL_ALLOW_PAID=1`; the spend cap over the ledger defaults to $5 until the Meta credits are confirmed. | M | ASSUMED | `longtail/llm/client.py` |
+| A-207 | A streamed token-priced call is costed at its pre-call estimate, because the text deltas carry no usage; SAM calls are costed by frames. | M | ASSUMED | `longtail/llm/client.py` |
+| A-208 | The Meta Model API is OpenAI-compatible: `files.create(purpose="user_data")`, `responses.create`, `responses.stream`; the SDK's own retries are off. VERIFY on the first paid call. | M | ASSUMED | `longtail/llm/client.py` |
+| A-209 | The planner runs on `muse-wonder-1.0`; `LONGTAIL_PLANNER_MODEL` switches it (e.g. to `muse-spark-1.3`). | M | ASSUMED | `longtail/agent/planner.py` |
+| A-210 | SAM phrases come from a table in the planner (pedestrian: person, cyclist, car, truck, bus), not from the model; C3's phrase test may change the table. | both | ASSUMED | `longtail/agent/planner.py` |
+| A-211 | Default meanings of vague words (near = within 5 m, close = within 10 m, walking = moving, parked = stopped, partly hidden = occluded_by), the same ones the M7 gold specs use. | M | ASSUMED | `longtail/agent/planner.py` |
+| A-212 | `tool_choice: "required"` forces exactly one of the planner's two tools. VERIFY on Wonder. | M | ASSUMED | `longtail/agent/planner.py` |
+
+IDs A-201 and up are Mayank's, so they never collide with Chethan's IDs on open branches.
