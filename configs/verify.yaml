@@ -1,0 +1,54 @@
+# Verification thresholds (plan C4 and C6). Frozen with the evaluation queries; a change after the freeze
+# needs a note in docs/eval-report.md and a justification on development queries only.
+# ASSUMPTION A-58: every threshold lives here; the loader has no defaults in code
+
+association:
+  # Plan C4 step 1: erode each mask so edge pixels do not pick up background points.
+  # ASSUMPTION A-50: erosion uses a disk of this radius; boxes are inset by the same number of pixels
+  erode_px: 3
+  # Plan C4 step 2: points inside the mask's box at any depth; below this the frame is UNVERIFIABLE.
+  min_coverage: 5
+  # Plan C4 step 3: drop points less than this far above the ground.
+  ground_height_m: 0.2
+  # Not in the plan: the LiDAR sits above the cameras and sees past an object onto what is behind it, and
+  # those points land inside the object's mask. Per image cell, drop points this far behind the nearest one.
+  # ASSUMPTION A-63: depth-buffer visibility filter after ground removal; 0 disables it
+  visibility_cell_px: 8
+  visibility_margin_m: 1.0
+  # Plan C4 step 4: split depths at gaps over this, keep the nearest part holding this share of points.
+  # ASSUMPTION A-51: camera z depth; if no part holds the share, the largest part is used
+  depth_gap_m: 0.8
+  nearest_cluster_min_frac: 0.3
+  # Plan C4 step 4: DBSCAN in 3D, keep the largest component.
+  dbscan_eps_m: 0.5
+  dbscan_min_points: 5
+  # Plan C4 step 7: "mask" uses the eroded mask; "frustum" uses the box even when a mask exists.
+  selection: mask
+
+  ground:
+    # ASSUMPTION A-49: local plane around the object, falling back to one plane per sweep
+    mode: local  # local | global
+    local_radius_m: 3.0
+    min_local_inliers: 30
+    ransac_iterations: 200
+    # RANSAC draws its three seed points from this lowest share of points by height (ground is lowest).
+    ransac_seed_lowest_frac: 0.3
+    ransac_inlier_m: 0.1
+    max_tilt_deg: 15.0
+    # A plane with more than this share of points further than below_margin_m under it is a roof, not ground.
+    max_below_frac: 0.05
+    below_margin_m: 0.3
+    global_sample_points: 5000
+    seed: 0
+
+  merge:
+    # Plan C4 step 6: same class, adjacent cameras, within this distance over this share of shared timestamps.
+    max_centroid_dist_m: 1.0
+    min_shared_frac: 0.5
+    # ASSUMPTION A-74: or when their clusters share at least this many LiDAR points at that timestamp, making
+    # up at least this share of the smaller cluster (a mask spilling onto a neighbour shares only a few)
+    min_shared_points: 5
+    min_shared_points_frac: 0.15
+    # ASSUMPTION A-56: same-camera fragments: extrapolate over gaps up to this long, velocity from this window
+    fragment_max_gap_s: 1.0
+    fragment_velocity_window_s: 1.0
