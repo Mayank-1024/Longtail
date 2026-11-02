@@ -1,0 +1,659 @@
+# LongTail evaluation queries (M7), Mayank. 25 queries: 10 dev, 15 held-out.
+# Split: seeded random draw within each tier (seed 20261102; dev = 3 single, 4 behaviour, 3 relational), not chosen by hand.
+# Frozen by commit before the Nov 3 feature freeze; a query may be replaced only before the freeze (plan C7).
+# Format A-128 (longtail.queries/v1); gold specs are ScenarioSpecs evaluated on labels by `longtail gt build`.
+format: longtail.queries/v1
+queries:
+- query_id: cyclist_within_15
+  text: a cyclist within 15 m
+  split: heldout
+  tier: single
+  gold:
+    query: a cyclist within 15 m
+    actors:
+    - id: a1
+      cls: cyclist
+      sam_prompt: cyclist
+    predicates:
+    - name: exists
+      actors:
+      - a1
+      args: {}
+    - name: within_distance
+      actors:
+      - a1
+      args:
+        m: 15.0
+    assumptions: []
+    clarification: null
+- query_id: bus_ahead_30
+  text: a bus ahead of us within 30 m
+  split: dev
+  tier: single
+  gold:
+    query: a bus ahead of us within 30 m
+    actors:
+    - id: a1
+      cls: bus
+      sam_prompt: bus
+    predicates:
+    - name: exists
+      actors:
+      - a1
+      args: {}
+    - name: relative_position
+      actors:
+      - a1
+      args:
+        side: ahead
+    - name: within_distance
+      actors:
+      - a1
+      args:
+        m: 30.0
+    assumptions: []
+    clarification: null
+- query_id: truck_within_20
+  text: a truck within 20 m
+  split: heldout
+  tier: single
+  gold:
+    query: a truck within 20 m
+    actors:
+    - id: a1
+      cls: truck
+      sam_prompt: truck
+    predicates:
+    - name: exists
+      actors:
+      - a1
+      args: {}
+    - name: within_distance
+      actors:
+      - a1
+      args:
+        m: 20.0
+    assumptions:
+    - truck includes pickups (A-123)
+    clarification: null
+- query_id: ped_within_5
+  text: a pedestrian within 5 m of us
+  split: dev
+  tier: single
+  gold:
+    query: a pedestrian within 5 m of us
+    actors:
+    - id: a1
+      cls: pedestrian
+      sam_prompt: person
+    predicates:
+    - name: exists
+      actors:
+      - a1
+      args: {}
+    - name: within_distance
+      actors:
+      - a1
+      args:
+        m: 5.0
+    assumptions: []
+    clarification: null
+- query_id: ped_left
+  text: a pedestrian on our left
+  split: heldout
+  tier: single
+  gold:
+    query: a pedestrian on our left
+    actors:
+    - id: a1
+      cls: pedestrian
+      sam_prompt: person
+    predicates:
+    - name: exists
+      actors:
+      - a1
+      args: {}
+    - name: relative_position
+      actors:
+      - a1
+      args:
+        side: left
+    assumptions: []
+    clarification: null
+- query_id: car_behind_10
+  text: a car behind us within 10 m
+  split: dev
+  tier: single
+  gold:
+    query: a car behind us within 10 m
+    actors:
+    - id: a1
+      cls: car
+      sam_prompt: car
+    predicates:
+    - name: exists
+      actors:
+      - a1
+      args: {}
+    - name: relative_position
+      actors:
+      - a1
+      args:
+        side: behind
+    - name: within_distance
+      actors:
+      - a1
+      args:
+        m: 10.0
+    assumptions: []
+    clarification: null
+- query_id: cyclist_ahead
+  text: a cyclist ahead of us
+  split: heldout
+  tier: single
+  gold:
+    query: a cyclist ahead of us
+    actors:
+    - id: a1
+      cls: cyclist
+      sam_prompt: cyclist
+    predicates:
+    - name: exists
+      actors:
+      - a1
+      args: {}
+    - name: relative_position
+      actors:
+      - a1
+      args:
+        side: ahead
+    assumptions: []
+    clarification: null
+- query_id: bus_within_15
+  text: a bus within 15 m
+  split: heldout
+  tier: single
+  gold:
+    query: a bus within 15 m
+    actors:
+    - id: a1
+      cls: bus
+      sam_prompt: bus
+    predicates:
+    - name: exists
+      actors:
+      - a1
+      args: {}
+    - name: within_distance
+      actors:
+      - a1
+      args:
+        m: 15.0
+    assumptions: []
+    clarification: null
+- query_id: ped_crossing_ego_moving
+  text: a pedestrian crossing in front of us while we move
+  split: dev
+  tier: behaviour
+  gold:
+    query: a pedestrian crossing in front of us while we move
+    actors:
+    - id: a1
+      cls: pedestrian
+      sam_prompt: person
+    predicates:
+    - name: exists
+      actors:
+      - a1
+      args: {}
+    - name: crossing_ego_path
+      actors:
+      - a1
+      args: {}
+    - &id002
+      name: ego_moving
+      actors: []
+      args: {}
+    assumptions: []
+    clarification: null
+- query_id: cyclist_crossing
+  text: a cyclist crossing our path
+  split: dev
+  tier: behaviour
+  gold:
+    query: a cyclist crossing our path
+    actors:
+    - id: a1
+      cls: cyclist
+      sam_prompt: cyclist
+    predicates:
+    - name: exists
+      actors:
+      - a1
+      args: {}
+    - name: crossing_ego_path
+      actors:
+      - a1
+      args: {}
+    assumptions: []
+    clarification: null
+- query_id: cyclist_moving_ego_stopped
+  text: a moving cyclist while we're stopped
+  split: dev
+  tier: behaviour
+  gold:
+    query: a moving cyclist while we're stopped
+    actors:
+    - id: a1
+      cls: cyclist
+      sam_prompt: cyclist
+    predicates:
+    - name: exists
+      actors:
+      - a1
+      args: {}
+    - name: moving
+      actors:
+      - a1
+      args: {}
+    - &id001
+      name: ego_stopped
+      actors: []
+      args: {}
+    assumptions: []
+    clarification: null
+- query_id: ped_walking_ego_stopped
+  text: a pedestrian walking while we wait
+  split: dev
+  tier: behaviour
+  gold:
+    query: a pedestrian walking while we wait
+    actors:
+    - id: a1
+      cls: pedestrian
+      sam_prompt: person
+    predicates:
+    - name: exists
+      actors:
+      - a1
+      args: {}
+    - name: moving
+      actors:
+      - a1
+      args: {}
+    - *id001
+    assumptions:
+    - walking = moving
+    clarification: null
+- query_id: bus_stopped
+  text: a stopped bus
+  split: heldout
+  tier: behaviour
+  gold:
+    query: a stopped bus
+    actors:
+    - id: a1
+      cls: bus
+      sam_prompt: bus
+    predicates:
+    - name: exists
+      actors:
+      - a1
+      args: {}
+    - name: stopped
+      actors:
+      - a1
+      args: {}
+    assumptions: []
+    clarification: null
+- query_id: truck_moving_20
+  text: a moving truck within 20 m
+  split: heldout
+  tier: behaviour
+  gold:
+    query: a moving truck within 20 m
+    actors:
+    - id: a1
+      cls: truck
+      sam_prompt: truck
+    predicates:
+    - name: exists
+      actors:
+      - a1
+      args: {}
+    - name: moving
+      actors:
+      - a1
+      args: {}
+    - name: within_distance
+      actors:
+      - a1
+      args:
+        m: 20.0
+    assumptions:
+    - truck includes pickups (A-123)
+    clarification: null
+- query_id: car_crossing
+  text: a car crossing in front of us
+  split: heldout
+  tier: behaviour
+  gold:
+    query: a car crossing in front of us
+    actors:
+    - id: a1
+      cls: car
+      sam_prompt: car
+    predicates:
+    - name: exists
+      actors:
+      - a1
+      args: {}
+    - name: crossing_ego_path
+      actors:
+      - a1
+      args: {}
+    assumptions: []
+    clarification: null
+- query_id: ped_standing_ahead_10_ego_moving
+  text: a pedestrian standing still ahead of us within 10 m while we drive
+  split: heldout
+  tier: behaviour
+  gold:
+    query: a pedestrian standing still ahead of us within 10 m while we drive
+    actors:
+    - id: a1
+      cls: pedestrian
+      sam_prompt: person
+    predicates:
+    - name: exists
+      actors:
+      - a1
+      args: {}
+    - name: stopped
+      actors:
+      - a1
+      args: {}
+    - name: relative_position
+      actors:
+      - a1
+      args:
+        side: ahead
+    - name: within_distance
+      actors:
+      - a1
+      args:
+        m: 10.0
+    - *id002
+    assumptions:
+    - standing still = stopped
+    clarification: null
+- query_id: ped_walking_right_ego_moving
+  text: a pedestrian walking on our right while we move
+  split: heldout
+  tier: behaviour
+  gold:
+    query: a pedestrian walking on our right while we move
+    actors:
+    - id: a1
+      cls: pedestrian
+      sam_prompt: person
+    predicates:
+    - name: exists
+      actors:
+      - a1
+      args: {}
+    - name: moving
+      actors:
+      - a1
+      args: {}
+    - name: relative_position
+      actors:
+      - a1
+      args:
+        side: right
+    - *id002
+    assumptions:
+    - walking = moving
+    clarification: null
+- query_id: ped_near_stopped_bus
+  text: a pedestrian near a stopped bus
+  split: heldout
+  tier: relational
+  gold:
+    query: a pedestrian near a stopped bus
+    actors:
+    - id: a1
+      cls: pedestrian
+      sam_prompt: person
+    - id: b1
+      cls: bus
+      sam_prompt: bus
+    predicates:
+    - name: exists
+      actors:
+      - a1
+      args: {}
+    - name: exists
+      actors:
+      - b1
+      args: {}
+    - name: near
+      actors:
+      - a1
+      - b1
+      args:
+        m: 5.0
+    - name: stopped
+      actors:
+      - b1
+      args: {}
+    assumptions:
+    - near = within 5 m
+    clarification: null
+- query_id: ped_hidden_by_car
+  text: a pedestrian partly hidden by a car
+  split: heldout
+  tier: relational
+  gold:
+    query: a pedestrian partly hidden by a car
+    actors:
+    - id: a1
+      cls: pedestrian
+      sam_prompt: person
+    predicates:
+    - name: exists
+      actors:
+      - a1
+      args: {}
+    - name: occluded_by
+      actors:
+      - a1
+      args:
+        cls: car
+    assumptions:
+    - partly hidden = a nearer car covers at least 20% of the box
+    clarification: null
+- query_id: cyclist_near_moving_car
+  text: a cyclist near a moving car
+  split: heldout
+  tier: relational
+  gold:
+    query: a cyclist near a moving car
+    actors:
+    - id: a1
+      cls: cyclist
+      sam_prompt: cyclist
+    - id: c1
+      cls: car
+      sam_prompt: car
+    predicates:
+    - name: exists
+      actors:
+      - a1
+      args: {}
+    - name: exists
+      actors:
+      - c1
+      args: {}
+    - name: near
+      actors:
+      - a1
+      - c1
+      args:
+        m: 5.0
+    - name: moving
+      actors:
+      - c1
+      args: {}
+    assumptions:
+    - near = within 5 m
+    clarification: null
+- query_id: two_peds_within_2
+  text: two pedestrians within 2 m of each other
+  split: dev
+  tier: relational
+  gold:
+    query: two pedestrians within 2 m of each other
+    actors:
+    - id: a1
+      cls: pedestrian
+      sam_prompt: person
+    - id: a2
+      cls: pedestrian
+      sam_prompt: person
+    predicates:
+    - name: exists
+      actors:
+      - a1
+      args: {}
+    - name: exists
+      actors:
+      - a2
+      args: {}
+    - name: near
+      actors:
+      - a1
+      - a2
+      args:
+        m: 2.0
+    assumptions: []
+    clarification: null
+- query_id: ped_near_truck
+  text: a pedestrian near a truck
+  split: heldout
+  tier: relational
+  gold:
+    query: a pedestrian near a truck
+    actors:
+    - id: a1
+      cls: pedestrian
+      sam_prompt: person
+    - id: t1
+      cls: truck
+      sam_prompt: truck
+    predicates:
+    - name: exists
+      actors:
+      - a1
+      args: {}
+    - name: exists
+      actors:
+      - t1
+      args: {}
+    - name: near
+      actors:
+      - a1
+      - t1
+      args:
+        m: 5.0
+    assumptions:
+    - near = within 5 m
+    - truck includes pickups (A-123)
+    clarification: null
+- query_id: ped_hidden_crossing
+  text: a pedestrian hidden by a car, crossing in front of us
+  split: heldout
+  tier: relational
+  gold:
+    query: a pedestrian hidden by a car, crossing in front of us
+    actors:
+    - id: a1
+      cls: pedestrian
+      sam_prompt: person
+    predicates:
+    - name: exists
+      actors:
+      - a1
+      args: {}
+    - name: occluded_by
+      actors:
+      - a1
+      args:
+        cls: car
+    - name: crossing_ego_path
+      actors:
+      - a1
+      args: {}
+    assumptions:
+    - hidden = a nearer car covers at least 20% of the box
+    clarification: null
+- query_id: cyclist_hidden_by_truck
+  text: a cyclist partly hidden by a truck
+  split: dev
+  tier: relational
+  gold:
+    query: a cyclist partly hidden by a truck
+    actors:
+    - id: a1
+      cls: cyclist
+      sam_prompt: cyclist
+    predicates:
+    - name: exists
+      actors:
+      - a1
+      args: {}
+    - name: occluded_by
+      actors:
+      - a1
+      args:
+        cls: truck
+    assumptions:
+    - partly hidden = a nearer truck covers at least 20% of the box
+    clarification: null
+- query_id: ped_crossing_car_stopped_right
+  text: a pedestrian crossing in front of us while a car is stopped on our right
+  split: dev
+  tier: relational
+  gold:
+    query: a pedestrian crossing in front of us while a car is stopped on our right
+    actors:
+    - id: a1
+      cls: pedestrian
+      sam_prompt: person
+    - id: c1
+      cls: car
+      sam_prompt: car
+    predicates:
+    - name: exists
+      actors:
+      - a1
+      args: {}
+    - name: crossing_ego_path
+      actors:
+      - a1
+      args: {}
+    - name: exists
+      actors:
+      - c1
+      args: {}
+    - name: stopped
+      actors:
+      - c1
+      args: {}
+    - name: relative_position
+      actors:
+      - c1
+      args:
+        side: right
+    assumptions: []
+    clarification: null
