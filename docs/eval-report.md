@@ -121,3 +121,14 @@ All on the synthetic scene. Every predicate has a PASS, a FAIL and an UNVERIFIAB
 Why "stopped" PASSes on a 0.6 s run (A-94): every frame is judged on a full 1 s window of clean steps, centred on the frame but kept inside the speed series. For the back camera's track (2.2 to 3.9 s), any window touching the position jump at 2.6 to 2.8 s is UNVERIFIABLE, so only the frames from 3.4 s on have a clean window, and near the series' end they all share the last second, 2.9 to 3.9 s (net speed 0.006 m/s, every step below 0.3 m/s). The 0.6 s is the run of PASS frames, which needs only min_duration_s (0.5 s); the evidence behind it is the full 1 s, and each verdict's window is in its evidence (`judged_window`).
 
 Neither car ever PASSes moving. The implausible-jump rule is what stops the C5 spikes from becoming "moving", but most of their frames end up UNVERIFIABLE rather than stopped: the "stopped" verdict rests on 0.6 s of evidence. That is honest, and it is thin; better positions for speed (C5) would turn those frames into evidence.
+
+## C9: visualization export
+
+Per finding (`longtail viz`), measured on the synthetic scene; the second row is sized like PandaSet (an 8 s window, 1920x1080 images, about 76k LiDAR points per sweep), with a plain background in place of photos.
+
+| Case | Overlays | JPEG total (mean each) | bev.json | timeline.json | Export time |
+|---|---|---|---|---|---|
+| Synthetic default: 25 frames, 640x480, 9k points per sweep | 150 | 5.5 MB (37 kB) | 3.4 MB | 7 kB | 1.0 s |
+| PandaSet-sized: 80 frames, 1920x1080, 76k points per sweep | 480 | 131.5 MB (274 kB) | 3.7 MB | 21 kB | 13.9 s |
+
+The bird's-eye file stays under its 5 MB budget (A-99) by thinning to about 2,700 points per frame at PandaSet size. The overlays dominate: six full-resolution cameras for every frame of an 8 s window is about 130 MB per finding, more with real photos. Downscaling overlays or exporting only the frames the web view shows would cut that; not done, since the plan fixes neither.
