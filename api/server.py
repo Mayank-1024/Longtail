@@ -42,6 +42,7 @@ from pydantic import BaseModel, Field
 from longtail.agent.orchestrator import SearchAgent, TraceEvent, open_with
 from longtail.contracts import Finding, ScenarioSpec
 from longtail.data.base import Scene
+from longtail.env import load_dotenv
 from longtail.explain.cards import make_card
 from longtail.llm.client import BudgetExceeded, NoKeyError, PaidCallsDisabled, ReplayMissError
 from longtail.pipeline import SceneOpener
@@ -337,6 +338,7 @@ def create_app(
 
 
 def create_app_from_env() -> FastAPI:
+    load_dotenv()
     mode: Mode = os.environ.get("LONGTAIL_MODE", "replay")  # type: ignore[assignment]
     run_root = Path(os.environ.get("LONGTAIL_RUNS", "runs"))
     if mode == "offline-demo":
