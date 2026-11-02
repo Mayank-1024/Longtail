@@ -133,8 +133,8 @@ Choices the build plan does not fix, made before the contracts session so work c
 | A-214 | Scenes are searched by up to 4 worker threads, one scene per worker; a failing scene is reported with its error and never stops the others. | M | ASSUMED | `longtail/pipeline.py` |
 | A-215 | The orchestrator runs on the planner's model (Wonder) with at most 6 model calls per query; after that, or when the budget runs out, it finishes with every verified finding. | M | ASSUMED | `longtail/agent/orchestrator.py` |
 | A-216 | A `search_scenes` result shows the model at most 5 findings per scene, verified first, with the failing predicates and reasons. | M | ASSUMED | `longtail/agent/orchestrator.py` |
-| A-217 | Spark Open on Baseten is priced at a placeholder upper bound of $1 / $3 per 1M tokens until Baseten's price is checked; the spend cap counts it with the Meta spend. | M | ASSUMED | `longtail/llm/client.py` |
-| A-218 | The Spark Open model slug on Baseten is `meta-models/muse-spark-open-1026` (plan 3), called through OpenAI-compatible chat completions. VERIFY on the first call. | M | ASSUMED | `longtail/llm/baseten.py` |
+| A-217 | Spark Open on Baseten costs $1.25 / $4.25 per 1M input / output tokens (cached input $0.15, not used), from a third-party snapshot of Baseten's pricing page dated 2026-10-23; Baseten's own page was not reachable. Reasoning tokens are billed as output. The spend cap counts it with the Meta spend. VERIFY against the Baseten billing page after the first real run. | M | ASSUMED | `longtail/llm/client.py` |
+| A-218 | The Spark Open model slug on Baseten is `meta-models/muse-spark-open-1026`, called through OpenAI-compatible chat completions. Verified by the first live call on 2026-11-02 (smoke check). | M | CONFIRMED | `longtail/llm/baseten.py` |
 | A-219 | A sentence citing a FAIL or UNVERIFIABLE result must contain a hedge phrase ("could not", "failed", "not verified", ...); otherwise the card is rejected. | M | ASSUMED | `longtail/explain/validate.py` |
 | A-220 | A card has at most 4 sentences and is written from at most 3 keyframe images. | M | ASSUMED | `longtail/explain/cards.py` |
 | A-221 | Baseline (a) windows are 2 s with no overlap, one keyframe per second, as a 3x2 tile with 640 px cells. | both | ASSUMED | `longtail/eval/baseline_vlm.py` |
@@ -142,5 +142,6 @@ Choices the build plan does not fix, made before the contracts session so work c
 | A-223 | Describing windows is shared by all queries, so each query's `cost_usd` and `seconds` carry an equal share of it on top of its own matching calls. | both | ASSUMED | `longtail/eval/baseline_vlm.py` |
 | A-224 | The web view's offline-demo mode uses synthetic scenes and a scripted model (api/demo.py) with a banner on every page; it is for building the UI only, never for footage, numbers or claims. | M | ASSUMED | `api/demo.py` |
 | A-225 | A finding's visual export (C9) runs on its first detail view, for every finding of that scene's run at once, and is reused afterwards. | M | ASSUMED | `api/server.py` |
+| A-226 | Spark Open reasons before answering and the reasoning counts against `max_tokens` (first live call: 262 reasoning tokens for a 7-token answer). Every Baseten call asks for `reasoning_effort: low` (cut that call to 65 output tokens) and gets 1,500 tokens of headroom above its answer limit. | M | ASSUMED | `longtail/llm/baseten.py` |
 
 IDs A-201 and up are Mayank's, so they never collide with Chethan's IDs on open branches.

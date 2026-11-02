@@ -45,6 +45,9 @@ def check_spark_open() -> bool:
         purpose="smoke",
     )
     print(f"  reply: {resp.text!r}; usage {resp.usage}; ${resp.usd:.6f}")
+    assert resp.text.strip() == '{"ok": true}', (
+        "reply is not the exact JSON: check A-226 (reasoning headroom)"
+    )
     assert resp.text and resp.usage.get("input_tokens", 0) > 0, "no text or no usage: check A-218"
     return True
 

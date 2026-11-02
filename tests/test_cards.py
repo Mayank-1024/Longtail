@@ -12,7 +12,14 @@ from synthetic import SyntheticScene, track_source
 from longtail.contracts import ScenarioSpec
 from longtail.explain.cards import make_card, template_card
 from longtail.explain.validate import Card, Sentence, validate_card
-from longtail.llm.baseten import SPARK_OPEN, BasetenTransport, from_chat, spark_open_client, to_chat
+from longtail.llm.baseten import (
+    REASONING_HEADROOM_TOKENS,
+    SPARK_OPEN,
+    BasetenTransport,
+    from_chat,
+    spark_open_client,
+    to_chat,
+)
 from longtail.llm.cache import ResponseCache
 from longtail.llm.client import ModelClient, PaidCallsDisabled
 from longtail.llm.ledger import Ledger
@@ -191,7 +198,8 @@ def test_baseten_request_and_response_shapes():
             "temperature": 0,
         }
     )
-    assert payload["max_tokens"] == 50 and payload["temperature"] == 0
+    assert payload["max_tokens"] == 50 + REASONING_HEADROOM_TOKENS and payload["temperature"] == 0
+    assert payload["reasoning_effort"] == "low"
     assert payload["messages"][1]["content"][1] == {
         "type": "image_url",
         "image_url": {"url": "data:image/jpeg;base64,AA"},
@@ -200,4 +208,23 @@ def test_baseten_request_and_response_shapes():
         {"choices": [{"message": {"content": "hi"}}], "usage": {"prompt_tokens": 3, "completion_tokens": 4}}
     )
     assert out["output"][0]["content"][0]["text"] == "hi"
-    assert out["usage"] == {"input_tokens": 3, "output_tokens": 4}
+    assert out["usage"] == {"input_tokens": 3, "output_tokens": 4, "reasoning_tokens": 0}
+
+
+def test_baseten_reasoning_cutoff_is_empty_text_and_counted():
+    """The shape of the first live reply (2026-11-02): all 20 tokens went to reasoning, so no answer text."""
+    out = from_chat(
+        {
+            "choices": [
+                {"finish_reason": "length", "message": {"content": None, "reasoning_content": "We need"}}
+            ],
+            "usage": {
+                "prompt_tokens": 156,
+                "completion_tokens": 20,
+                "completion_tokens_details": {"reasoning_tokens": 20},
+            },
+        }
+    )
+    assert out["output"][0]["content"][0]["text"] == ""
+    assert out["usage"] == {"input_tokens": 156, "output_tokens": 20, "reasoning_tokens": 20}
+    assert out["finish_reason"] == "length"

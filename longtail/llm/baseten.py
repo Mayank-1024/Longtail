@@ -13,8 +13,12 @@ from typing import Any
 from longtail.llm.client import ModelClient, TransportError
 
 BASE_URL = "https://inference.baseten.co/v1"
-# ASSUMPTION A-218: the Spark Open model slug on Baseten is meta-models/muse-spark-open-1026 (plan 3); VERIFY
+# ASSUMPTION A-218: Spark Open slug on Baseten is meta-models/muse-spark-open-1026 (verified 2026-11-02)
 SPARK_OPEN = "meta-models/muse-spark-open-1026"
+# ASSUMPTION A-226: Spark Open reasons before it answers and the reasoning counts against max_tokens, so every
+# call asks for low reasoning effort and gets this many tokens of headroom on top of its answer limit
+REASONING_EFFORT = "low"
+REASONING_HEADROOM_TOKENS = 1500
 
 
 def _part(part: Any) -> Any:
@@ -46,7 +50,8 @@ def to_chat(request: dict[str, Any]) -> dict[str, Any]:
         )
     payload: dict[str, Any] = {"model": request["model"], "messages": messages}
     if "max_output_tokens" in request:
-        payload["max_tokens"] = request["max_output_tokens"]
+        payload["max_tokens"] = request["max_output_tokens"] + REASONING_HEADROOM_TOKENS
+    payload["reasoning_effort"] = request.get("reasoning_effort", REASONING_EFFORT)
     for k in ("temperature", "response_format"):
         if k in request:
             payload[k] = request[k]
@@ -54,9 +59,15 @@ def to_chat(request: dict[str, Any]) -> dict[str, Any]:
 
 
 def from_chat(raw: dict[str, Any]) -> dict[str, Any]:
-    """A chat-completions response to the client's response shape."""
-    text = "".join((c.get("message") or {}).get("content") or "" for c in raw.get("choices") or [])
+    """A chat-completions response to the client's response shape.
+
+    Completion tokens include the reasoning tokens, so the cost is right; an answer cut off while the model
+    was still reasoning comes back as empty text, which the card validator and the baseline parser reject.
+    """
+    choices = raw.get("choices") or []
+    text = "".join((c.get("message") or {}).get("content") or "" for c in choices)
     usage = raw.get("usage") or {}
+    details = usage.get("completion_tokens_details") or {}
     return {
         "output": [
             {"type": "message", "role": "assistant", "content": [{"type": "output_text", "text": text}]}
@@ -64,7 +75,9 @@ def from_chat(raw: dict[str, Any]) -> dict[str, Any]:
         "usage": {
             "input_tokens": int(usage.get("prompt_tokens", 0)),
             "output_tokens": int(usage.get("completion_tokens", 0)),
+            "reasoning_tokens": int(details.get("reasoning_tokens") or 0),
         },
+        "finish_reason": next((c.get("finish_reason") for c in choices if c.get("finish_reason")), None),
     }
 
 
