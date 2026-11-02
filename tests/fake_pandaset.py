@@ -5,6 +5,7 @@ import math
 from pathlib import Path
 
 import pandas as pd
+from PIL import Image
 
 CAMERAS = (
     "front_camera",
@@ -16,6 +17,7 @@ CAMERAS = (
 )
 T0 = 1557550800.0  # 2019-05-11 05:00 UTC = 22:00 PDT, night in San Francisco
 SF = {"lat": 37.7761, "long": -122.3993}
+IMAGE_SIZE = (64, 48)
 
 
 def yaw_pose(x: float, y: float, z: float, yaw: float) -> dict:
@@ -57,7 +59,7 @@ def write_sequence(
         d = seq / "camera" / cam
         d.mkdir(parents=True, exist_ok=True)
         for k in range(n_frames):
-            (d / f"{k:02d}.jpg").write_bytes(b"")  # never decoded by the adapter
+            Image.new("RGB", IMAGE_SIZE).save(d / f"{k:02d}.jpg")
         _dump(d / "timestamps.json", [ts + 0.005 for ts in lidar_ts])
         _dump(d / "poses.json", [yaw_pose(0.1 * c, -1.0 * k, 1.5, 0.3 * c) for k in range(n_frames)])
         _dump(d / "intrinsics.json", {"fx": 900.0 + c, "fy": 901.0, "cx": 960.0, "cy": 540.0})

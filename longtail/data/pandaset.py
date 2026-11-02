@@ -15,7 +15,7 @@ Devkit conventions, read from its source at the pinned commit:
 import json
 import math
 from datetime import UTC, datetime
-from functools import cached_property
+from functools import cache, cached_property
 from pathlib import Path
 from typing import Any
 
@@ -172,6 +172,14 @@ class PandaSetScene(Scene):
     def intrinsics(self, camera: str) -> np.ndarray:
         k = self._camera_meta[camera]["K"]
         return np.array([[k["fx"], 0.0, k["cx"]], [0.0, k["fy"], k["cy"]], [0.0, 0.0, 1.0]])
+
+    @cache  # noqa: B019 - one entry per camera, scenes are few and long-lived
+    def image_size(self, camera: str) -> tuple[int, int]:
+        from PIL import Image
+
+        # ASSUMPTION A-42: every frame of a camera has the size of its first image; only the header is read
+        with Image.open(self._camera_meta[camera]["images"][0]) as img:
+            return img.size
 
     def extrinsics(self, camera: str, ts: float) -> np.ndarray:
         # ASSUMPTION A-27: camera frames are OpenCV optical frames; this returns world_from_camera

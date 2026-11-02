@@ -35,6 +35,9 @@ class _StubScene(Scene):
     def extrinsics(self, camera, ts):
         return np.eye(4)
 
+    def image_size(self, camera):
+        return (1, 1)
+
     def _labels(self, frame_idx):
         return f"cuboids {frame_idx}"
 
@@ -101,7 +104,8 @@ def test_no_sequence_load_anywhere():
 
 def test_eval_ground_truth_used_only_in_eval_code():
     # ASSUMPTION A-36: eval_ground_truth() is entered only in eval/, the index builder and tests
-    allowed = ("longtail/eval/", "scripts/build_index.py")
+    # ASSUMPTION A-45: the overlay script may enter it to pick frames with moving objects
+    allowed = ("longtail/eval/", "scripts/build_index.py", "scripts/overlay.py")
     offenders = [
         rel
         for p in _py_files("longtail", "scripts", "api")

@@ -5,7 +5,7 @@ import time
 
 import numpy as np
 import pytest
-from fake_pandaset import CAMERAS, T0, write_sequence, yaw_pose
+from fake_pandaset import CAMERAS, IMAGE_SIZE, T0, write_sequence, yaw_pose
 
 from longtail.data.base import TS_TOLERANCE_S
 from longtail.data.guard import LabelAccessError, eval_ground_truth, labels_allowed
@@ -41,6 +41,8 @@ def test_cameras_frames_and_intrinsics(scene):
     assert frames[1].ts == pytest.approx(T0 + 0.105)
     assert frames[2].image_path.name == "02.jpg" and frames[2].image_path.parent.name == "front_camera"
     np.testing.assert_allclose(scene.intrinsics("front_camera"), [[900, 0, 960], [0, 901, 540], [0, 0, 1]])
+    # ASSUMPTION A-42: image size comes from the first image's header
+    assert scene.image_size("back_camera") == IMAGE_SIZE
 
 
 def test_lidar_keeps_pandar64_points_with_timestamps(scene):
