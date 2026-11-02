@@ -129,5 +129,9 @@ Choices the build plan does not fix, made before the contracts session so work c
 | A-210 | SAM phrases come from a table in the planner (pedestrian: person, cyclist, car, truck, bus), not from the model; C3's phrase test may change the table. | both | ASSUMED | `longtail/agent/planner.py` |
 | A-211 | Default meanings of vague words (near = within 5 m, close = within 10 m, walking = moving, parked = stopped, partly hidden = occluded_by), the same ones the M7 gold specs use. | M | ASSUMED | `longtail/agent/planner.py` |
 | A-212 | `tool_choice: "required"` forces exactly one of the planner's two tools. VERIFY on Wonder. | M | ASSUMED | `longtail/agent/planner.py` |
+| A-213 | Glimmer triage is cut (plan cut list item 7): the pipeline searches uniform 4 s windows with a 2 s stride over each scene. | both | ASSUMED | `longtail/pipeline.py` |
+| A-214 | Scenes are searched by up to 4 worker threads, one scene per worker; a failing scene is reported with its error and never stops the others. | M | ASSUMED | `longtail/pipeline.py` |
+| A-215 | The orchestrator runs on the planner's model (Wonder) with at most 6 model calls per query; after that, or when the budget runs out, it finishes with every verified finding. | M | ASSUMED | `longtail/agent/orchestrator.py` |
+| A-216 | A `search_scenes` result shows the model at most 5 findings per scene, verified first, with the failing predicates and reasons. | M | ASSUMED | `longtail/agent/orchestrator.py` |
 
 IDs A-201 and up are Mayank's, so they never collide with Chethan's IDs on open branches.
