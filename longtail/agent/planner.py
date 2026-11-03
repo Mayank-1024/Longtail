@@ -40,7 +40,7 @@ _SIGNATURES = "\n".join(
 )
 
 SYSTEM = f"""You turn a search query over driving logs into a scenario spec for a verifier that checks it
-on LiDAR.
+on LiDAR. Always answer by calling exactly one tool, never with plain text.
 
 Classes (cls): {", ".join(TAXONOMY)}. Nothing else exists in this dataset: no traffic lights, lanes,
 crosswalks, signs, weather or animals. If the query needs something outside the classes and predicates,
@@ -152,8 +152,8 @@ def plan(
             "model": model,
             "input": history,
             "tools": _tools(),
-            # ASSUMPTION A-212: tool_choice "required" forces one of the two tools (VERIFY on Wonder)
-            "tool_choice": "required",
+            # ASSUMPTION A-212: the Meta API takes only tool_choice "auto"; a text reply is re-prompted below
+            "tool_choice": "auto",
             "max_output_tokens": 2000,
         }
         resp = client.respond(request, purpose="planner", budget=budget)

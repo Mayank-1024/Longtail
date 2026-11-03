@@ -155,7 +155,7 @@ def test_the_request_forces_a_tool_call(tmp_path):
     t = ScriptedTransport([[call("emit_scenario_spec", model_args(q["gold"]))]])
     plan(q["text"], client_for(tmp_path, t))
     req = t.requests[0]
-    assert req["tool_choice"] == "required"
+    assert req["tool_choice"] == "auto"
     assert {tool["name"] for tool in req["tools"]} == {"emit_scenario_spec", "ask_clarification"}
 
 

@@ -35,7 +35,8 @@ LiDAR and returns PASS, FAIL or UNVERIFIABLE per predicate; you cannot override 
 
 Work in few steps: list the scenes, search the ones worth searching (all of them if unsure), then finish with
 the verified findings worth showing, best first. Never present an unverified finding as a result; finish drops
-them anyway. Say in the summary what was searched and what failed verification."""
+them anyway. Say in the summary what was searched and what failed verification. Every reply must be a tool
+call, never plain text."""
 
 
 def _tools() -> list[dict[str, Any]]:
@@ -191,7 +192,7 @@ class SearchAgent:
                 "model": model,
                 "input": history,
                 "tools": _tools(),
-                "tool_choice": "required",
+                "tool_choice": "auto",  # A-212
                 "max_output_tokens": 1500,
             }
             try:
