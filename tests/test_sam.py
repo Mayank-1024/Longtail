@@ -69,6 +69,24 @@ def test_clip_round_trip(scene, tmp_path):
     assert again.cached and again.path == clip.path
 
 
+def test_concurrent_builders_of_one_clip_all_succeed(scene, tmp_path):
+    # A-242: prefetch runs one job per concept, so several workers build the same camera clip at once
+    from concurrent.futures import ThreadPoolExecutor
+
+    with ThreadPoolExecutor(max_workers=5) as pool:
+        clips = list(
+            pool.map(lambda _: build_clip(scene, "front_camera", cache_dir=tmp_path / "clips"), range(5))
+        )
+    assert len({c.index.clip_id for c in clips}) == 1
+    check_clip(
+        clips[0].path,
+        len(clips[0].index.frames),
+        clips[0].index.fps,
+        (clips[0].index.crop.width, clips[0].index.crop.height),
+    )
+    assert not list((tmp_path / "clips").glob("*.tmp*"))
+
+
 def test_clip_check_catches_a_wrong_frame_count(scene, tmp_path):
     clip = build_clip(scene, "front_camera", cache_dir=tmp_path / "clips")
     with pytest.raises(RuntimeError, match="decoded frames"):

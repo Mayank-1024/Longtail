@@ -8,6 +8,7 @@ import hashlib
 import json
 import os
 import subprocess
+import threading
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
@@ -135,7 +136,10 @@ def build_clip(scene: Scene, camera: str, crop: Crop = "full", cache_dir: Path |
         return Clip(out, ClipIndex.model_validate_json(index_path.read_text()), cached=True)
 
     out.parent.mkdir(parents=True, exist_ok=True)
-    tmp = out.with_suffix(".tmp.mp4")
+    # ASSUMPTION A-242: concurrent builders of one clip (prefetch runs one job per concept) each encode
+    # to their own temp file; the index lands first and the MP4 is renamed last, so a visible MP4 is complete
+    tag = f"{os.getpid()}.{threading.get_ident()}"
+    tmp = out.with_name(f"{clip_id}.{tag}.tmp.mp4")
     cmd = [
         "ffmpeg",
         "-hide_banner",
@@ -174,7 +178,6 @@ def build_clip(scene: Scene, camera: str, crop: Crop = "full", cache_dir: Path |
     if proc.wait() != 0:
         raise RuntimeError(f"ffmpeg failed: {proc.stderr.read().decode(errors='replace')}")
     check_clip(tmp, len(frames), fps, (w, h))
-    tmp.rename(out)
 
     index = ClipIndex(
         clip_id=clip_id,
@@ -186,7 +189,10 @@ def build_clip(scene: Scene, camera: str, crop: Crop = "full", cache_dir: Path |
         crop=ClipCrop(name=crop, x0=x0, y0=y0, width=w, height=h, full_width=full_w, full_height=full_h),
         frames=[ClipFrame(clip_frame=k, frame_idx=f.frame_idx, ts=f.ts) for k, f in enumerate(frames)],
     )
-    index_path.write_text(index.model_dump_json(indent=1))
+    tmp_index = index_path.with_name(f"{index_path.name}.{tag}.tmp")
+    tmp_index.write_text(index.model_dump_json(indent=1))
+    tmp_index.replace(index_path)
+    tmp.replace(out)
     return Clip(out, index, cached=False)
 
 
