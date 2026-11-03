@@ -5,15 +5,21 @@
 import argparse
 import sys
 
+from longtail.agent import cli as agent_cli
 from longtail.data import cli as data_cli
+from longtail.env import load_dotenv
+from longtail.explain import cli as explain_cli
 from longtail.vision import cli as sam_cli
 from longtail.viz import cli as viz_cli
 
 
 def main(argv: list[str] | None = None) -> int:
+    load_dotenv()
     parser = argparse.ArgumentParser(prog="longtail")
     sub = parser.add_subparsers(dest="command", required=True)
     data_cli.register(sub)
+    agent_cli.register(sub)
+    explain_cli.register(sub)
     # ASSUMPTION A-103: `longtail viz` is registered here, in the shared dispatcher (A-34)
     viz_cli.register(sub)
     # ASSUMPTION A-119: `longtail sam` is registered here too, in the shared dispatcher (A-34)
