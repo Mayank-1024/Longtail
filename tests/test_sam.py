@@ -253,3 +253,14 @@ def test_cli_without_key_and_replay_miss(tmp_path, monkeypatch, capsys):
     assert main(["sam", "synthetic", "front_camera", "person", "--replay"]) == 0
     out = capsys.readouterr().out
     assert "1 track(s) from 12 frames (cache hit, $0)" in out and "cost: $0.0000" in out
+
+
+def test_native_fps_refuses_timestamps_that_do_not_increase():
+    import numpy as np
+    import pytest
+
+    from longtail.vision.clips import native_fps
+
+    assert native_fps(np.array([0.0, 0.1, 0.2])) == 10.0
+    with pytest.raises(ValueError, match="do not increase"):
+        native_fps(np.array([5.0, 5.0, 5.0, 5.1]))  # scene 054's camera timestamps (A-240)

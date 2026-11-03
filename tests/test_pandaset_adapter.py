@@ -1,6 +1,7 @@
 """PandaSet adapter against a fake sequence read through the real devkit; dataset checks skip without data."""
 
 import math
+import os
 import time
 
 import numpy as np
@@ -27,6 +28,13 @@ def test_list_scenes(tmp_path):
     (tmp_path / "not_a_sequence").mkdir()
     assert list_scenes(tmp_path) == ["001", "002"]
     assert list_scenes(tmp_path / "missing") == []
+
+
+def test_list_scenes_leaves_out_broken_sequences(tmp_path):
+    for sid in ("001", "054"):
+        write_sequence(tmp_path, sid)
+    assert list_scenes(tmp_path) == ["001"]
+    assert list_scenes(tmp_path, include_excluded=True) == ["001", "054"]
 
 
 def test_missing_sequence_raises(tmp_path):
@@ -156,6 +164,10 @@ REAL = list_scenes(pandaset_root())
 needs_dataset = pytest.mark.skipif(not REAL, reason="PandaSet not downloaded")
 
 
+# A shared cluster disk reads a cold scene far slower than a laptop SSD; the cluster run raises the budget
+LOAD_BUDGET_S = float(os.environ.get("LONGTAIL_LOAD_BUDGET_S", "5"))
+
+
 @needs_dataset
 def test_real_scene_loads_in_under_5s():
     start = time.perf_counter()
@@ -168,7 +180,7 @@ def test_real_scene_loads_in_under_5s():
             scene.extrinsics(cam, f.ts)
     for ts in scene.lidar_timestamps():
         assert scene.lidar(ts).points.shape[1] == 5
-    assert time.perf_counter() - start < 5.0
+    assert time.perf_counter() - start < LOAD_BUDGET_S
 
 
 @needs_dataset

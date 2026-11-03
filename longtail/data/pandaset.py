@@ -82,11 +82,24 @@ def sun_elevation_deg(ts: float, lat: float, lon: float) -> float:
     return math.degrees(math.asin(max(-1.0, min(1.0, s))))
 
 
-def list_scenes(root: Path) -> list[str]:
-    """Sequence ids under a PandaSet root (directories holding lidar/ and camera/)."""
+# ASSUMPTION A-240: sequences left out of every search and evaluation, with the reason; their data is broken
+# upstream, and guessing a repair would put made-up timing into the results
+EXCLUDED_SCENES = {
+    "054": "camera timestamps repeat (59 of 79 gaps are zero on all six cameras), so no clip can be timed",
+}
+
+
+def list_scenes(root: Path, include_excluded: bool = False) -> list[str]:
+    """Sequence ids under a PandaSet root (directories holding lidar/ and camera/), minus EXCLUDED_SCENES."""
     if not root.is_dir():
         return []
-    return sorted(d.name for d in root.iterdir() if (d / "lidar").is_dir() and (d / "camera").is_dir())
+    return sorted(
+        d.name
+        for d in root.iterdir()
+        if (d / "lidar").is_dir()
+        and (d / "camera").is_dir()
+        and (include_excluded or d.name not in EXCLUDED_SCENES)
+    )
 
 
 def _read_json(path: Path) -> Any:

@@ -101,7 +101,10 @@ def crop_box(width: int, height: int, crop: Crop) -> tuple[int, int, int, int]:
 
 def native_fps(ts: np.ndarray) -> float:
     """The scene's frame rate from its timestamps (10 Hz for PandaSet)."""
-    return float(round(1.0 / float(np.median(np.diff(ts))), 3))
+    step = float(np.median(np.diff(ts))) if len(ts) > 1 else 0.0
+    if not step > 0:
+        raise ValueError(f"timestamps do not increase (median step {step}); the frame rate is unknown")
+    return float(round(1.0 / step, 3))
 
 
 def build_clip(scene: Scene, camera: str, crop: Crop = "full", cache_dir: Path | None = None) -> Clip:

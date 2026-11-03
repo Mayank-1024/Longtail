@@ -4,7 +4,7 @@
 #SBATCH -c 8
 #SBATCH --mem=24G
 #SBATCH -t 06:00:00
-#SBATCH --array=0-102%40         # one task per PandaSet scene (A-233), at most 40 at a time
+#SBATCH --array=0-101%40         # one task per usable PandaSet scene (A-233; 054 is left out, A-240)
 #SBATCH -o /scratch/%u/longtail/logs/%x-%A_%a.out
 # Configurations (c) and (b) and the three breaks on one scene, all 25 queries, saved unscored;
 # merge.sbatch scores them.
@@ -16,9 +16,11 @@ export PATH="$HOME/.local/bin:$PATH" UV_CACHE_DIR=/scratch/$USER/uv-cache
 module load FFmpeg/7.1.1
 # Index scenes first, then the rest, so the 30-scene evaluation completes first.
 mapfile -t SCENES < <(uv run --no-sync python -c "
-import json, os
+import json
+from pathlib import Path
+from longtail.data.pandaset import list_scenes
 idx = [s['scene_id'] for s in json.load(open('longtail/data/index.json'))['scenes']]
-print('\n'.join(idx + sorted(set(os.listdir('data/pandaset')) - set(idx))))")
+print('\n'.join(idx + sorted(set(list_scenes(Path('data/pandaset'))) - set(idx))))")
 SID=${SCENES[$SLURM_ARRAY_TASK_ID]}
 mkdir -p runs/ledgers
 export LONGTAIL_DATA_DIR=$PWD/data LONGTAIL_REPLAY=1 LONGTAIL_ALLOW_PAID=0 \
