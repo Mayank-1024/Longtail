@@ -1,0 +1,39 @@
+{
+ "clip_id": "SYNTHETIC",
+ "scene_id": "synthetic-fixture",
+ "camera": "front_camera",
+ "fps": 10.0,
+ "codec": "h264",
+ "pix_fmt": "yuv420p",
+ "crop": {
+  "name": "full",
+  "x0": 0,
+  "y0": 0,
+  "width": 64,
+  "height": 48,
+  "full_width": 64,
+  "full_height": 48
+ },
+ "frames": [
+  {
+   "clip_frame": 0,
+   "frame_idx": 10,
+   "ts": 100.0
+  },
+  {
+   "clip_frame": 1,
+   "frame_idx": 11,
+   "ts": 100.1
+  },
+  {
+   "clip_frame": 2,
+   "frame_idx": 12,
+   "ts": 100.2
+  },
+  {
+   "clip_frame": 3,
+   "frame_idx": 13,
+   "ts": 100.3
+  }
+ ]
+}

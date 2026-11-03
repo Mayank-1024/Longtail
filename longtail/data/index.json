@@ -1,0 +1,209 @@
+{
+  "dataset": "pandaset",
+  "devkit_commit": "59be180e2a3f3e37f6d66af9e67bf944ccbf6ec0",
+  "built_by": "scripts/build_index.py",
+  "built_at": "2026-11-03T13:35:25+00:00",
+  "seed": 20261028,
+  "scenes": [
+    {
+      "scene_id": "005",
+      "n_frames": 80,
+      "time_of_day": "day",
+      "ego_moving_frac": 1.0
+    },
+    {
+      "scene_id": "006",
+      "n_frames": 80,
+      "time_of_day": "day",
+      "ego_moving_frac": 1.0
+    },
+    {
+      "scene_id": "008",
+      "n_frames": 80,
+      "time_of_day": "day",
+      "ego_moving_frac": 1.0
+    },
+    {
+      "scene_id": "011",
+      "n_frames": 80,
+      "time_of_day": "day",
+      "ego_moving_frac": 1.0
+    },
+    {
+      "scene_id": "012",
+      "n_frames": 80,
+      "time_of_day": "day",
+      "ego_moving_frac": 1.0
+    },
+    {
+      "scene_id": "013",
+      "n_frames": 80,
+      "time_of_day": "day",
+      "ego_moving_frac": 1.0
+    },
+    {
+      "scene_id": "014",
+      "n_frames": 80,
+      "time_of_day": "day",
+      "ego_moving_frac": 1.0
+    },
+    {
+      "scene_id": "015",
+      "n_frames": 80,
+      "time_of_day": "day",
+      "ego_moving_frac": 1.0
+    },
+    {
+      "scene_id": "016",
+      "n_frames": 80,
+      "time_of_day": "day",
+      "ego_moving_frac": 1.0
+    },
+    {
+      "scene_id": "017",
+      "n_frames": 80,
+      "time_of_day": "day",
+      "ego_moving_frac": 1.0
+    },
+    {
+      "scene_id": "018",
+      "n_frames": 80,
+      "time_of_day": "day",
+      "ego_moving_frac": 0.418
+    },
+    {
+      "scene_id": "019",
+      "n_frames": 80,
+      "time_of_day": "day",
+      "ego_moving_frac": 1.0
+    },
+    {
+      "scene_id": "020",
+      "n_frames": 80,
+      "time_of_day": "day",
+      "ego_moving_frac": 1.0
+    },
+    {
+      "scene_id": "021",
+      "n_frames": 80,
+      "time_of_day": "day",
+      "ego_moving_frac": 1.0
+    },
+    {
+      "scene_id": "023",
+      "n_frames": 80,
+      "time_of_day": "day",
+      "ego_moving_frac": 1.0
+    },
+    {
+      "scene_id": "041",
+      "n_frames": 80,
+      "time_of_day": "day",
+      "ego_moving_frac": 1.0
+    },
+    {
+      "scene_id": "048",
+      "n_frames": 80,
+      "time_of_day": "day",
+      "ego_moving_frac": 1.0
+    },
+    {
+      "scene_id": "050",
+      "n_frames": 80,
+      "time_of_day": "day",
+      "ego_moving_frac": 1.0
+    },
+    {
+      "scene_id": "054",
+      "n_frames": 80,
+      "time_of_day": "day",
+      "ego_moving_frac": 1.0
+    },
+    {
+      "scene_id": "058",
+      "n_frames": 80,
+      "time_of_day": "night",
+      "ego_moving_frac": 1.0
+    },
+    {
+      "scene_id": "059",
+      "n_frames": 80,
+      "time_of_day": "night",
+      "ego_moving_frac": 1.0
+    },
+    {
+      "scene_id": "062",
+      "n_frames": 80,
+      "time_of_day": "night",
+      "ego_moving_frac": 1.0
+    },
+    {
+      "scene_id": "063",
+      "n_frames": 80,
+      "time_of_day": "night",
+      "ego_moving_frac": 1.0
+    },
+    {
+      "scene_id": "074",
+      "n_frames": 80,
+      "time_of_day": "night",
+      "ego_moving_frac": 1.0
+    },
+    {
+      "scene_id": "079",
+      "n_frames": 80,
+      "time_of_day": "night",
+      "ego_moving_frac": 1.0
+    },
+    {
+      "scene_id": "103",
+      "n_frames": 80,
+      "time_of_day": "day",
+      "ego_moving_frac": 1.0
+    },
+    {
+      "scene_id": "109",
+      "n_frames": 80,
+      "time_of_day": "day",
+      "ego_moving_frac": 1.0
+    },
+    {
+      "scene_id": "117",
+      "n_frames": 80,
+      "time_of_day": "day",
+      "ego_moving_frac": 1.0
+    },
+    {
+      "scene_id": "124",
+      "n_frames": 80,
+      "time_of_day": "day",
+      "ego_moving_frac": 1.0
+    },
+    {
+      "scene_id": "158",
+      "n_frames": 80,
+      "time_of_day": "day",
+      "ego_moving_frac": 1.0
+    }
+  ],
+  "phrase_tuning_scenes": [
+    {
+      "scene_id": "035",
+      "n_frames": 80,
+      "time_of_day": "day",
+      "ego_moving_frac": 1.0
+    },
+    {
+      "scene_id": "047",
+      "n_frames": 80,
+      "time_of_day": "day",
+      "ego_moving_frac": 1.0
+    },
+    {
+      "scene_id": "056",
+      "n_frames": 80,
+      "time_of_day": "day",
+      "ego_moving_frac": 1.0
+    }
+  ]
+}

@@ -1,0 +1,65 @@
+# Ground-truth thresholds (plan C7). Separate from verify.yaml so tuning the verifier never moves the ground
+# truth; frozen with the evaluation queries.
+# ASSUMPTION A-09: ground truth has its own thresholds here, not verify.yaml
+
+# ASSUMPTION A-123: PandaSet label strings (devkit Cuboids docstring) mapped onto the taxonomy; others ignored
+label_map:
+  Pedestrian: pedestrian
+  Pedestrian with Object: pedestrian
+  Bicycle: cyclist
+  Car: car
+  Pickup Truck: truck
+  Medium-sized Truck: truck
+  Semi-truck: truck
+  Bus: bus
+# ASSUMPTION A-123: a Bicycle is a cyclist only "With Rider" (attributes.rider_status); a parked bike is not
+cyclist_requires_rider: true
+
+visibility:
+  # ASSUMPTION A-122: an object counts only where its cuboid projects into a camera and lies within 60 m
+  max_range_m: 60.0
+
+# ASSUMPTION A-124: moving and stopped from cuboid geometry (the plan) or from the human-labelled attributes
+motion_source: geometry  # geometry | attribute
+
+tracks:
+  # Same smoothing as the verifier's C5 tracks, applied to cuboid centres.
+  savgol_window: 5
+  savgol_polyorder: 2
+  max_interp_gap_s: 0.3
+
+ego_path:
+  horizon_s: 3.0
+  half_width_m: 1.5
+  min_length_m: 10.0
+
+predicates:
+  within_distance:
+    # Cuboid centres are exact, so no tolerance (the verifier's covers C4's near-face bias).
+    tolerance_m: 0.0
+  motion:
+    moving_mps: 0.5
+    stopped_mps: 0.3
+    window_s: 1.0
+    max_accel_mps2: 10.0
+  crossing:
+    max_ahead_m: 30.0
+    min_lateral_mps: 0.3
+  relative_position:
+    window_s: 1.0
+    min_frac: 0.5
+  occluded_by:
+    min_cover_frac: 0.2
+
+matching:
+  # Plan C7: same scene, temporal IoU >= 0.3, each bound actor within 2 m of a labelled object.
+  min_temporal_iou: 0.3
+  max_actor_distance_m: 2.0
+  # ASSUMPTION A-127: a finding with boxes only (no LiDAR positions) matches by box IoU
+  min_box_iou: 0.3
+
+claims:
+  # ASSUMPTION A-10: a claimed box is true when at least this share of its own area lies inside a projected
+  # label box of the claimed class (intersection over the claimed box): SAM and VLM boxes cover the visible
+  # part, the projected cuboid the whole object
+  min_inside_frac: 0.5

@@ -227,7 +227,16 @@ def track_motion(scene: Scene, assoc: Association, cfg: TracksConfig | None = No
     if not known.any():
         known[:] = True
         obs_pos = np.array([s.xyz_world for s in samples])
-    obs_ts, obs_pos = obs_ts[known], obs_pos[known]
+    motion = motion_from_positions(scene, obs_ts[known], obs_pos[known], cfg)
+    speeds = [float(motion.speed_mps[motion.index(s.ts)]) if _has(motion, s.ts) else 0.0 for s in samples]
+    return TrackedObject(assoc, assoc.track.model_copy(update={"speed_mps": speeds}), motion, fit)
+
+
+def motion_from_positions(scene: Scene, obs_ts: np.ndarray, obs_pos: np.ndarray, cfg: TracksConfig) -> Motion:
+    """Motion on the sweep grid from observed world positions: interpolate short gaps, smooth, differentiate.
+
+    cfg needs savgol_window, savgol_polyorder and max_interp_gap_s (C7 passes its own, A-09).
+    """
     sweeps = scene.lidar_timestamps()
     # ASSUMPTION A-67: a gap longer than max_interp_gap_s splits the series, whatever caused it
     breaks = np.flatnonzero(np.diff(obs_ts) > cfg.max_interp_gap_s + 1e-6) + 1
@@ -247,7 +256,7 @@ def track_motion(scene: Scene, assoc: Association, cfg: TracksConfig | None = No
         return np.concatenate([p[k] for p in parts])
 
     vel = cat(5)
-    motion = Motion(
+    return Motion(
         ts=cat(0),
         observed=cat(1),
         segment=cat(2),
@@ -259,8 +268,6 @@ def track_motion(scene: Scene, assoc: Association, cfg: TracksConfig | None = No
         speed_mps=np.linalg.norm(vel[:, :2], axis=1),
         reliable=np.concatenate([np.full(len(p[0]), p[7]) for p in parts]),
     )
-    speeds = [float(motion.speed_mps[motion.index(s.ts)]) if _has(motion, s.ts) else 0.0 for s in samples]
-    return TrackedObject(assoc, assoc.track.model_copy(update={"speed_mps": speeds}), motion, fit)
 
 
 def _has(motion: Motion, ts: float) -> bool:
