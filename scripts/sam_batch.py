@@ -12,7 +12,6 @@ Needs the camera images and JSON of each scene (scripts/fetch_pandaset.py --part
 """
 
 import argparse
-import json
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -21,7 +20,7 @@ from pathlib import Path
 import yaml
 
 from longtail.contracts import ScenarioSpec
-from longtail.data.index import INDEX_PATH, open_scene, pandaset_root
+from longtail.data.index import load_index, open_scene, pandaset_root
 from longtail.data.pandaset import list_scenes
 from longtail.env import load_dotenv
 from longtail.pipeline import concepts
@@ -34,7 +33,7 @@ QUERIES = Path("longtail/eval/queries/queries.yaml")
 
 def scene_order(only: list[str] | None) -> list[str]:
     on_disk = list_scenes(pandaset_root())
-    index = [s["scene_id"] for s in json.loads(INDEX_PATH.read_text())["scenes"]]
+    index = [s["scene_id"] for s in load_index()["scenes"]]
     order = [s for s in index if s in on_disk] + sorted(set(on_disk) - set(index))
     return [s for s in order if only is None or s in only]
 

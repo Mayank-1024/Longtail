@@ -231,3 +231,15 @@ def test_real_cameras_look_along_the_ego_axes(camera, look):
     )
     assert ego_from_cam[:3, 2] @ look > 0.95, f"{camera} optical axis {ego_from_cam[:3, 2]} in the ego frame"
     assert ego_from_cam[:3, 1] @ [0, 0, -1] > 0.95, f"{camera} image-down axis is not ego -z"
+
+
+def test_scene_index_leaves_out_excluded_scenes():
+    import json
+
+    from longtail.data.index import INDEX_PATH, load_index
+    from longtail.data.pandaset import EXCLUDED_SCENES
+
+    raw = [s["scene_id"] for s in json.loads(INDEX_PATH.read_text())["scenes"]]
+    kept = [s["scene_id"] for s in load_index()["scenes"]]
+    assert kept == [s for s in raw if s not in EXCLUDED_SCENES]
+    assert "054" in raw and "054" not in kept  # the committed draw is kept as built (A-240)

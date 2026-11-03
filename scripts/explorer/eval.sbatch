@@ -16,12 +16,13 @@ export PATH="$HOME/.local/bin:$PATH" UV_CACHE_DIR=/scratch/$USER/uv-cache
 module load FFmpeg/7.1.1
 # Index scenes first, then the rest, so the 30-scene evaluation completes first.
 mapfile -t SCENES < <(uv run --no-sync python -c "
-import json
 from pathlib import Path
+from longtail.data.index import load_index
 from longtail.data.pandaset import list_scenes
-idx = [s['scene_id'] for s in json.load(open('longtail/data/index.json'))['scenes']]
+idx = [s['scene_id'] for s in load_index()['scenes']]
 print('\n'.join(idx + sorted(set(list_scenes(Path('data/pandaset'))) - set(idx))))")
-SID=${SCENES[$SLURM_ARRAY_TASK_ID]}
+# SCENE=<id> (sbatch --array=0 --export=ALL,SCENE=<id>) reruns one scene
+SID=${SCENE:-${SCENES[$SLURM_ARRAY_TASK_ID]}}
 mkdir -p runs/ledgers
 export LONGTAIL_DATA_DIR=$PWD/data LONGTAIL_REPLAY=1 LONGTAIL_ALLOW_PAID=0 \
   LONGTAIL_LEDGER=runs/ledgers/eval-$SID.jsonl LONGTAIL_SAM_WORKERS=6
