@@ -10,12 +10,12 @@ PandaSet is now on disk here (scenes 001, 005, 018 and 058, from `scripts/fetch_
 |---|---|---|---|
 | C1 Dataset adapter | Merged | [#2](https://github.com/Mayank-1024/longtail/pull/2); ego-frame fix [#20](https://github.com/Mayank-1024/longtail/pull/20) | Done. Real-data tests pass on the 4 scenes. The ego frame was 180 degrees off (A-25); Mayank found it on real data and fixed it in #20, which I checked. Scene 001 loads in 3.7 s and 3.6 s here against the plan's 5 s; Mayank measured about 10 s, and the cluster sets its own budget (`LONGTAIL_LOAD_BUDGET_S`). The test keeps 5 s, unmarked. Scene 054 is left out (A-240, broken camera timestamps). |
 | C2 Projection and sync | Merged | [#3](https://github.com/Mayank-1024/longtail/pull/3) | Done. Projection matches the devkit (`test_projection_real`). Six-camera overlays checked by eye on scenes 001 and 058 (day and night): points sit on building edges, poles, curbs and car bodies. One thing to watch: a thin band of near points 10 to 45 px above some close car roofs, probably the roof seen from the higher LiDAR (the overlay has no occlusion test), possibly a small calibration residual; static structure does not show it. 3 frames per scene are unsynced and marked so. |
-| C3 SAM 3.1 client | In #21 | [#9](https://github.com/Mayank-1024/longtail/pull/9) via [#21](https://github.com/Mayank-1024/longtail/pull/21) | Running live on the cluster (Mayank). Concept-phrase test skipped: changing a phrase now means re-running SAM on every scene; recorded as a limitation. New: `scripts/sam_coverage.py` lists missing (scene, camera, concept) responses in a cache (local branch, not pushed yet). |
+| C3 SAM 3.1 client | Merged (#21) | [#9](https://github.com/Mayank-1024/longtail/pull/9) via [#21](https://github.com/Mayank-1024/longtail/pull/21) | Running live on the cluster (Mayank). Concept-phrase test skipped: changing a phrase now means re-running SAM on every scene; recorded as a limitation. New: `scripts/sam_coverage.py` lists missing (scene, camera, concept) responses in a cache ([#23](https://github.com/Mayank-1024/longtail/pull/23)). |
 | C4 Mask to LiDAR | Merged | [#4](https://github.com/Mayank-1024/longtail/pull/4) | **Pending:** 17 of 20 real SAM masks correct by eye. Needs the SAM cache. |
 | C5 Tracks and ego path | Merged | [#5](https://github.com/Mayank-1024/longtail/pull/5) | **Pending:** a parked car under 0.3 m/s while the ego moves. Needs the SAM cache. |
 | C6 Verifier | Merged | [#6](https://github.com/Mayank-1024/longtail/pull/6) | No separate real-data check; the evaluation exercises it. |
-| C7 Ground truth | In #21 | [#10](https://github.com/Mayank-1024/longtail/pull/10) via #21 | Done on the 4 local scenes: 5 random positives checked by eye, 5 of 5 correct. Two notes for the report: the ground truth has no occlusion test (A-122), so some positives are hard to see (a night scene) and recall is a lower bound; a parked pickup counts as a truck (A-123). Mayank built the ground truth on all scenes. |
-| C8 Metrics, ablation, breaks | In #21 | [#11](https://github.com/Mayank-1024/longtail/pull/11) via #21 | The evaluation run is Mayank's, on the cluster. Configurations (a) to (c) only: (d) is not run, since Glimmer was cut (A-213). |
+| C7 Ground truth | Merged (#21) | [#10](https://github.com/Mayank-1024/longtail/pull/10) via #21 | Done on the 4 local scenes: 5 random positives checked by eye, 5 of 5 correct. Two notes for the report: the ground truth has no occlusion test (A-122), so some positives are hard to see (a night scene) and recall is a lower bound; a parked pickup counts as a truck (A-123). Mayank built the ground truth on all scenes. |
+| C8 Metrics, ablation, breaks | Merged (#21) | [#11](https://github.com/Mayank-1024/longtail/pull/11) via #21 | The evaluation run is Mayank's, on the cluster. Configurations (a) to (c) only: (d) is not run, since Glimmer was cut (A-213). |
 | C9 Visualization export | Merged | [#7](https://github.com/Mayank-1024/longtail/pull/7) | **Pending:** an export on a real scene, for its size and time. |
 | C10 Fresh-clone test | Pending (Nov 4) | | Clone, `uv sync`, download, `longtail demo --replay`, rules checklist. |
 
@@ -30,7 +30,7 @@ Agreed on 2026-11-03 (from my side):
 
 Waiting on Mayank:
 
-- **A-142 (both, proposed):** the evaluation runs on every usable PandaSet scene: 103 minus 054 (A-240), so 102. This supersedes the plan's 30 and the 30-scene index (29 after A-240). Headline numbers are over the 102; index-only results are secondary. Proposed in a docs PR after #21 merges, with the limits in `docs/eval-report.md`: the held-out split is by query, not by scene; development tuning used the same scenes; phrases untuned; recall a lower bound (A-122).
+- **A-142 (both, proposed):** the evaluation runs on every usable PandaSet scene: 103 minus 054 (A-240), so 102. This supersedes the plan's 30 and the 30-scene index (29 after A-240). Headline numbers are over the 102; index-only results are secondary. Registered in `docs/assumptions.md` (still needs Mayank's agreement), with the limits in `docs/eval-report.md`: the held-out split is by query, not by scene; development tuning used the same scenes; phrases untuned; recall a lower bound (A-122).
 - **#21 review comments:** none blocking (sweep-cache memory against `--mem=24G`, the track-cache temp file name, the spend cap with parallel workers, dropped streams that may be billed).
 
 The full register is `docs/assumptions.md`. The Oct 30 version of this file lists every assumption that touches Mayank's half.
@@ -118,10 +118,9 @@ uv run python -m longtail.eval.breaks --queries <file> --split heldout --replay
 
 ## d. How the open work merges
 
-1. Mayank merges #21 (`m/integration` into `main`): C3, C7, C8 and his M1 to M8.
-2. Then I rebase my local docs branch (A-142 and the `docs/eval-report.md` notes) onto `main` and open it as a docs-only PR, with the next status update.
-3. `scripts/sam_coverage.py` and its test go in a separate small PR.
-4. If `docs/status-chethan.md` conflicts during a merge, keep `main`'s version.
+1. #21 (`m/integration`) merged on 2026-11-03 with Mayank's OK: C3, C7, C8 and his M1 to M8 are on `main`. #9 and #14 were marked merged; #10 and #11 closed as superseded; Mayank's #15 to #19 are his to close.
+2. #23 (`scripts/sam_coverage.py`) and the eval-notes docs PR (A-142, the `docs/eval-report.md` notes) go to `main` directly.
+3. If `docs/status-chethan.md` conflicts during a merge, keep `main`'s version.
 
 ## e. What I need, in priority order
 
