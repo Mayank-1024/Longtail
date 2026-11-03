@@ -4,7 +4,7 @@
 
 An engineer types a rare scenario in plain English ("a pedestrian crossing in front of us while we move") and gets back the moments in multi-camera driving logs that contain it. Every claim a model makes about those moments is checked against a second sensor, LiDAR, before it counts. The model proposes; geometry decides.
 
-> **Status (Nov 2, 2026): built, not yet run on real data.** Every part below exists and is tested on a synthetic scene with scripted models. The first runs on PandaSet with the Meta models are pending (data download and API keys). Numbers appear in this README only after they are measured; until then each says *not measured yet*.
+> **Status (Nov 3, 2026): running on real data.** Every part below is built and tested (305 tests on synthetic scenes, plus real-data tests on PandaSet scene 001), and each Meta model has run live. The full evaluation on all 103 PandaSet scenes is in progress. Numbers appear in this README only after they are measured; until then each says *not measured yet*.
 
 ## How it works
 
@@ -22,7 +22,7 @@ flowchart LR
   V -.->|unverified| R[Rejected-by-verifier tab]
 ```
 
-1. **Plan.** Muse Wonder turns the query into a `ScenarioSpec` (actors, predicates, stated defaults such as "near = within 5 m") through one forced tool call. The spec is validated by the contract and by semantic checks, with errors sent back for a retry, or the planner asks one clarifying question.
+1. **Plan.** Muse Wonder turns the query into a `ScenarioSpec` (actors, predicates, stated defaults such as "near = within 5 m") through one tool call (the Meta API accepts only `tool_choice: "auto"`, so a reply without a tool call is sent back once more). The spec is validated by the contract and by semantic checks, with errors sent back for a retry, or the planner asks one clarifying question.
 2. **Search.** A budgeted agent on Wonder lists scenes, searches them, and finishes. Stop rule: `finish`, 6 model calls, or the query budget. Every step is in a trace.
 3. **See.** SAM 3.1 segments and tracks the named objects through each camera's video from a text prompt.
 4. **Verify.** Our code projects LiDAR into the cameras, keeps the points inside each mask, removes ground and background, clusters them, builds 3D tracks with speeds and the ego's future corridor, and evaluates each predicate per sweep as **PASS**, **FAIL** or **UNVERIFIABLE** with evidence (point counts, distances, speeds, reason codes). `verified` is computed from the results; nothing can set it.
@@ -38,6 +38,18 @@ flowchart LR
 | Muse Spark Open (open weights, on Baseten) | Evidence cards; ablation baseline (a), "describe then match" | `longtail/explain/`, `longtail/eval/baseline_vlm.py` |
 
 Muse Glimmer triage was planned and cut for time (configuration (d) of the ablation is not run); the agent searches uniform 4 s windows instead.
+
+## Measured so far
+
+| What | Result |
+|---|---|
+| Planner (Muse Wonder) against the gold specs, 10 development queries | 10/10 agree; one needed a retry after the semantic check caught an unused actor; $0.27 |
+| Planner against the gold specs, 15 held-out queries (run once) | 15/15 agree; two needed retries; $0.38 |
+| End to end on PandaSet scene 001: "a car behind us within 10 m" | Wonder planned, SAM 3.1 tracked cars in all 6 cameras, the verifier kept 2 findings and rejected 1; both overlap ground-truth events in time (the first lies inside one, the second overlaps one by 0.2 s; not yet scored by the evaluation's matching rule); $0.14 |
+| Evidence card (Muse Spark Open on Baseten) for a verified finding | Passed the validator on the first attempt; $0.004 |
+| SAM 3.1 cost | $0.016 per 80-frame camera clip, as listed ($0.20 per 1,000 frames) |
+
+The first real data also caught two bugs that synthetic tests could not: the ego frame was 180 degrees off (forward and left flipped, so "ahead" meant behind), and four queries had no ground-truth events in any of the 103 scenes; they were replaced by a rule written down before counting ([docs/assumptions.md](docs/assumptions.md), A-25 and A-228).
 
 ## Evaluation
 
@@ -61,7 +73,7 @@ cp .env.example .env                       # your own keys; paid calls stay off 
 uv run pytest                              # synthetic scene only: no dataset, no keys, no network
 ```
 
-Data: PandaSet (all 103 sequences, about 44.5 GB) into `$LONGTAIL_DATA_DIR/pandaset/` (see `scripts/download_data.sh`), then `uv run python scripts/build_index.py`.
+Data: PandaSet from its Hugging Face mirror, straight into `$LONGTAIL_DATA_DIR/pandaset/` without downloading the 44.5 GB zip first: `uv run python scripts/fetch_pandaset.py --parts labels` (all 103 scenes, 0.12 GB), then `--parts full --scenes 001,002` for the scenes you want (about 0.44 GB each). The 30-scene index is committed (`longtail/data/index.json`).
 
 ```bash
 uv run longtail plan "a cyclist within 15 m"                 # the spec only
