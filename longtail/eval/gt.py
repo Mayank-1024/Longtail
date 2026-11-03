@@ -322,6 +322,7 @@ class LabelScene:
                 # ASSUMPTION A-122: visible = projects into a synced camera frame and within max_range_m
                 obj.visible[float(ts)] = bool(boxes) and rng <= self.cfg.visibility.max_range_m
         self._tracked: dict[str, TrackedObject] = {}
+        self._boxes_at: dict[tuple[str, int], list[tuple[Cuboid, np.ndarray]]] = {}
 
     def _project(self, c: Cuboid, camera: str, frame_idx: int, ts: float) -> tuple[np.ndarray, float] | None:
         return projected_box(
@@ -333,13 +334,17 @@ class LabelScene:
 
     def boxes_at(self, camera: str, frame_idx: int) -> list[tuple[Cuboid, np.ndarray]]:
         """Every taxonomy cuboid of the nearest sweep projected into one camera frame (A-10 claim checks)."""
-        frame = self.scene.frames(camera)[frame_idx]
-        out = []
-        for c in self._by_sweep[self._frame_sweep[(camera, frame_idx)]]:
-            pb = self._project(c, camera, frame_idx, frame.ts)
-            if pb is not None:
-                out.append((c, pb[0]))
-        return out
+        # Memoised: scoring checks many claims (every query's, every window's) against the same frames
+        key = (camera, frame_idx)
+        if key not in self._boxes_at:
+            frame = self.scene.frames(camera)[frame_idx]
+            out = []
+            for c in self._by_sweep[self._frame_sweep[key]]:
+                pb = self._project(c, camera, frame_idx, frame.ts)
+                if pb is not None:
+                    out.append((c, pb[0]))
+            self._boxes_at[key] = out
+        return self._boxes_at[key]
 
     def of_class(self, cls: str) -> list[LabelObject]:
         return [o for o in self.objects.values() if o.cls == cls and any(o.visible.values())]

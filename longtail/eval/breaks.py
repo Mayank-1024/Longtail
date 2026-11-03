@@ -176,8 +176,12 @@ def write_break_partials(setup: ablation.Setup, root: Path) -> list[Path]:
 
 
 def merge_outcomes(root: Path):
+    truth: list[ablation._Truth] = []  # breaks change the searched scenes only, never truth_scenes or gt_cfg
+
     def outcomes(name, s, verifier):
-        return ablation.merge_config("c", s, break_dir(root, name))
+        if not truth:
+            truth.append(ablation._Truth(s))
+        return ablation.merge_config("c", s, break_dir(root, name), truth[0])
 
     return outcomes
 
