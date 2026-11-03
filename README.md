@@ -97,6 +97,8 @@ LONGTAIL_MODE=replay uv run uvicorn api.server:create_app_from_env --factory --p
 
 ## Dataset and credit
 
+SAM 3.1 by Meta is used under the [SAM License](https://github.com/facebookresearch/sam3/blob/main/LICENSE) (last updated November 19, 2025). LongTail calls SAM 3.1 through Meta's hosted API and does not include or redistribute its weights or code; the replay cache published with the demo holds only SAM's outputs (masks and tracks) for PandaSet clips.
+
 PandaSet by Hesai and Scale AI, licensed under CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/). Frames are shown with LiDAR, mask and box overlays added by LongTail. Dataset files are never committed.
 
 ## Built during the hackathon
