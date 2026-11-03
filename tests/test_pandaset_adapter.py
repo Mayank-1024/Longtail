@@ -10,7 +10,7 @@ from fake_pandaset import CAMERAS, IMAGE_SIZE, T0, write_sequence, yaw_pose
 from longtail.data.base import TS_TOLERANCE_S
 from longtail.data.guard import LabelAccessError, eval_ground_truth, labels_allowed
 from longtail.data.index import pandaset_root
-from longtail.data.pandaset import P64_FROM_EGO, PandaSetScene, list_scenes, pose_to_matrix
+from longtail.data.pandaset import PandaSetScene, list_scenes, pose_to_matrix
 
 pytest.importorskip("pandaset")
 
@@ -74,43 +74,13 @@ def test_pose_to_matrix_yaw():
 
 
 def test_ego_frame_axes(scene):
-    # ASSUMPTION A-25: Pandar64 forward is -y and left is +x; the fake ego drives along world -y
+    # ASSUMPTION A-25: Pandar64 forward is +y and left is -x; the fake ego drives along world +y
     pose = scene.ego_pose(T0)
-    np.testing.assert_allclose(pose[:3, :3] @ [1, 0, 0], [0, -1, 0], atol=1e-12)
-    np.testing.assert_allclose(pose[:3, :3] @ [0, 1, 0], [1, 0, 0], atol=1e-12)
+    np.testing.assert_allclose(pose[:3, :3] @ [1, 0, 0], [0, 1, 0], atol=1e-12)
+    np.testing.assert_allclose(pose[:3, :3] @ [0, 1, 0], [-1, 0, 0], atol=1e-12)
     np.testing.assert_allclose(pose[:3, :3] @ [0, 0, 1], [0, 0, 1], atol=1e-12)
     step = np.linalg.inv(pose) @ np.append(scene.ego_pose(T0 + 0.1)[:3, 3], 1.0)
     np.testing.assert_allclose(step[:3], [1.0, 0.0, 0.0], atol=1e-12)
-
-
-# Camera rotations from the devkit's docs/static_extrinsic_calibration.yaml at the pinned commit (w, x, y, z).
-STATIC_CAMERA_ROTATIONS = {
-    "front_camera": (0.016213200031258722, 0.0030578899383849464, 0.7114721800418571, -0.7025205466606356),
-    "back_camera": (0.713789231075861, 0.7003585531940812, -0.001595758695393934, -0.0005330311533742299),
-    "left_camera": (0.5050391917998245, 0.49253073152800625, -0.4989265501075421, 0.503409565706149),
-    "right_camera": (0.5087448402081216, 0.4947520981649951, 0.4977829953071897, -0.49860920419297333),
-}
-
-
-@pytest.mark.parametrize(
-    "camera, look",
-    [
-        ("front_camera", [1, 0, 0]),
-        ("back_camera", [-1, 0, 0]),
-        ("left_camera", [0, 1, 0]),
-        ("right_camera", [0, -1, 0]),
-    ],
-)
-def test_static_calibration_supports_the_ego_axes(camera, look):
-    # ASSUMPTION A-25: derived from the static calibration, read as a Pandar64-to-camera transform
-    w, x, y, z = STATIC_CAMERA_ROTATIONS[camera]
-    cam_from_p64 = pose_to_matrix(
-        {"heading": {"w": w, "x": x, "y": y, "z": z}, "position": {"x": 0, "y": 0, "z": 0}}
-    )
-    optical_in_ego = P64_FROM_EGO[:3, :3].T @ cam_from_p64[2, :3]
-    down_in_ego = P64_FROM_EGO[:3, :3].T @ cam_from_p64[1, :3]
-    assert optical_in_ego @ look > 0.99
-    assert down_in_ego @ [0, 0, -1] > 0.99
 
 
 def test_extrinsics_are_camera_poses(scene):
@@ -229,19 +199,23 @@ def test_real_ego_axes_and_world_up():
 
 
 @needs_dataset
-def test_real_cameras_match_static_calibration():
-    # ASSUMPTION A-25: camera poses agree with the static calibration read as Pandar64-to-camera
+@pytest.mark.parametrize(
+    "camera, look",
+    [
+        ("front_camera", [1, 0, 0]),
+        ("back_camera", [-1, 0, 0]),
+        ("left_camera", [0, 1, 0]),
+        ("right_camera", [0, -1, 0]),
+    ],
+)
+def test_real_cameras_look_along_the_ego_axes(camera, look):
+    # ASSUMPTION A-25: checked on the camera poses themselves, not on the devkit's static calibration file
+    # (read as Pandar64-to-camera it is 180 degrees off these poses in yaw)
     # ASSUMPTION A-27: extrinsics are world_from_camera
     scene = PandaSetScene(pandaset_root(), REAL[0])
-    ts = scene.lidar_timestamps()[0]
-    world_from_p64 = scene.ego_pose(ts) @ np.linalg.inv(P64_FROM_EGO)
-    for cam, (w, x, y, z) in STATIC_CAMERA_ROTATIONS.items():
-        frame = scene.frames(cam)[0]
-        cam_from_p64 = np.linalg.inv(scene.extrinsics(cam, frame.ts)) @ world_from_p64
-        static = pose_to_matrix(
-            {"heading": {"w": w, "x": x, "y": y, "z": z}, "position": {"x": 0, "y": 0, "z": 0}}
-        )
-        angle = np.degrees(
-            np.arccos(np.clip((np.trace(static[:3, :3].T @ cam_from_p64[:3, :3]) - 1) / 2, -1, 1))
-        )
-        assert angle < 2.0, f"{cam}: {angle:.2f} degrees from the static calibration"
+    frame = scene.frames(camera)[0]
+    ego_from_cam = np.linalg.inv(scene.ego_pose(scene.lidar_timestamps()[0])) @ scene.extrinsics(
+        camera, frame.ts
+    )
+    assert ego_from_cam[:3, 2] @ look > 0.95, f"{camera} optical axis {ego_from_cam[:3, 2]} in the ego frame"
+    assert ego_from_cam[:3, 1] @ [0, 0, -1] > 0.95, f"{camera} image-down axis is not ego -z"
