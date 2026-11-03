@@ -2,6 +2,29 @@
 
 Results and every deviation from the build plan, with the evidence for it. Numbers here come from tests or scripts in the repository; real-data results are added when PandaSet and SAM 3.1 output exist. Threshold changes after the freeze (plan C6) are recorded here with their justification on development queries only.
 
+## C1: dataset adapter
+
+### Load time: the plan's 5 s depends on the machine
+
+The plan's done check is that one scene loads all six cameras and LiDAR for every frame in under 5 s (`test_real_scene_loads_in_under_5s`). On scene 001, 2026-11-03:
+
+| Machine | Time |
+|---|---|
+| Mayank's M-series Mac, quiet | about 10 s |
+| Chethan's Mac, files just downloaded (probably in the OS file cache), two runs | 3.7 s, 3.6 s |
+
+Most of the time is the devkit reading the 80 LiDAR sweeps, so a cold disk costs the most. Nothing downstream depends on the 5 s: the evaluation loads each scene once per job. The test keeps the plan's 5 s and is not marked as an expected failure; `LONGTAIL_LOAD_BUDGET_S` raises the budget for the cluster's shared disk, which reads a cold scene far slower than a laptop.
+
+### Ego frame (A-25)
+
+The first real-data run found the ego frame 180 degrees off: forward was read as -y of the Pandar64 frame, from the devkit's static calibration file. On scene 001 the ego travels along +y, and the front, back, left and right cameras look along +y, -y, -x and +x. Fixed in #20, before any evaluation run. The verifier and the ground truth were wrong the same way, so their agreement would not have shown it; the real-data axis tests did.
+
+## C3: SAM 3.1 client
+
+### Concept phrases were not tuned
+
+The plan's concept-phrase test (2 or 3 phrases per class on 3 development scenes, with the winners going into `configs/taxonomy.yaml`) was not run. Changing a phrase now would mean re-running SAM on every scene, so the phrases are the ones first written in the taxonomy. SAM's recall per class is not measured, and a class whose phrase SAM finds poorly loses recall in configurations (b) and (c). The 3 phrase-tuning scenes in the index were never used for tuning.
+
 ## C4: mask to LiDAR association
 
 Everything below was measured on the synthetic scene (`tests/synthetic.py`), with the camera-side and LiDAR-side occlusion model on (A-43). The real-mask check (17 of 20 correct by eye) is still to do; see `tests/test_associate_real.py`.
@@ -187,3 +210,15 @@ Per finding (`longtail viz`), measured on the synthetic scene; the second row is
 | PandaSet-sized: 80 frames, 1920x1080, 76k points per sweep | 480 | 131.5 MB (274 kB) | 3.7 MB | 21 kB | 13.9 s |
 
 The bird's-eye file stays under its 5 MB budget (A-99) by thinning to about 2,700 points per frame at PandaSet size. The overlays dominate: six full-resolution cameras for every frame of an 8 s window is about 130 MB per finding, more with real photos. Downscaling overlays or exporting only the frames the web view shows would cut that; not done, since the plan fixes neither.
+
+## Limits of the evaluation
+
+- **Scenes:** all 103 PandaSet scenes except 054, whose camera timestamps are broken (A-240): 102 scenes (A-142), not the plan's 30. Results over the index scenes alone (29 once 054 is dropped), where reported, are secondary.
+- **The held-out split is by query, not by scene.** The 15 held-out queries are scored on the same 102 scenes as the 10 development queries. Held-out numbers measure how the system does on new queries, not on new scenes or places.
+- **Development tuning used the same 102 scenes.** Anything adjusted on development queries (thresholds, prompts) saw every scene the held-out queries are scored on.
+- **Concept phrases were not tuned** (C3 above); per-class SAM recall is not measured.
+- **Four queries were replaced on Nov 3, after the plan's Oct 31 freeze,** because they had no positives in any of the 103 scenes. The replacement rule was written down before counting (A-228).
+- **No triage:** Glimmer was cut, so configuration (d) is not run (A-213).
+- **Recall is a lower bound.** The ground truth counts a labelled object wherever its cuboid projects into a synced camera image within 60 m, with no occlusion test (A-122), so it includes objects that are hidden behind others or too dark to see. The system cannot find those, so measured recall understates recall on visible objects. Checked by eye on 5 random positives: in a night scene (058) most of the labelled pedestrians are hard to see or behind parked cars.
+- **Pickups count as trucks** (A-123), as documented. A query for a truck can be satisfied by a parked pickup; one of the 5 positives checked by eye was exactly that (scene 058).
+- **One dataset,** and the ground truth inherits the labels' errors (plan section 10).
