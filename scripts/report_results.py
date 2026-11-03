@@ -16,7 +16,7 @@ import json
 import sys
 from pathlib import Path
 
-CONFIGS = ("a", "b", "c")  # ASSUMPTION A-213: no (d)
+CONFIGS = ("a", "b", "c")  # no (d): Glimmer was cut (A-213)
 NAMES = {
     "a": "(a) Spark Open alone",
     "b": "(b) + SAM 3.1 tracks",
