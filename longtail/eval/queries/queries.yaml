@@ -2,6 +2,8 @@
 # Split: seeded random draw within each tier (seed 20261102; dev = 3 single, 4 behaviour, 3 relational), not chosen by hand.
 # Frozen by commit before the Nov 3 feature freeze; a query may be replaced only before the freeze (plan C7).
 # Format A-128 (longtail.queries/v1); gold specs are ScenarioSpecs evaluated on labels by `longtail gt build`.
+# 2026-11-03, before the freeze: 4 queries with zero positives on all 103 scenes were replaced, each by the
+# ASSUMPTION A-228: first candidate of the same split and tier with >= 3 positives in >= 2 scenes; no model saw them.
 format: longtail.queries/v1
 queries:
 - query_id: cyclist_within_15
@@ -210,39 +212,18 @@ queries:
       actors:
       - a1
       args: {}
-    - &id002
+    - &id001
       name: ego_moving
       actors: []
       args: {}
     assumptions: []
     clarification: null
-- query_id: cyclist_crossing
-  text: a cyclist crossing our path
+- query_id: cyclist_moving_ego_moving
+  text: a moving cyclist while we move
   split: dev
   tier: behaviour
   gold:
-    query: a cyclist crossing our path
-    actors:
-    - id: a1
-      cls: cyclist
-      sam_prompt: cyclist
-    predicates:
-    - name: exists
-      actors:
-      - a1
-      args: {}
-    - name: crossing_ego_path
-      actors:
-      - a1
-      args: {}
-    assumptions: []
-    clarification: null
-- query_id: cyclist_moving_ego_stopped
-  text: a moving cyclist while we're stopped
-  split: dev
-  tier: behaviour
-  gold:
-    query: a moving cyclist while we're stopped
+    query: a moving cyclist while we move
     actors:
     - id: a1
       cls: cyclist
@@ -256,8 +237,31 @@ queries:
       actors:
       - a1
       args: {}
-    - &id001
-      name: ego_stopped
+    - name: ego_moving
+      actors: []
+      args: {}
+    assumptions: []
+    clarification: null
+- query_id: ped_walking_ego_moving
+  text: a walking pedestrian while we move
+  split: dev
+  tier: behaviour
+  gold:
+    query: a walking pedestrian while we move
+    actors:
+    - id: a1
+      cls: pedestrian
+      sam_prompt: person
+    predicates:
+    - name: exists
+      actors:
+      - a1
+      args: {}
+    - name: moving
+      actors:
+      - a1
+      args: {}
+    - name: ego_moving
       actors: []
       args: {}
     assumptions: []
@@ -281,7 +285,9 @@ queries:
       actors:
       - a1
       args: {}
-    - *id001
+    - name: ego_stopped
+      actors: []
+      args: {}
     assumptions:
     - walking = moving
     clarification: null
@@ -383,7 +389,7 @@ queries:
       - a1
       args:
         m: 10.0
-    - *id002
+    - *id001
     assumptions:
     - standing still = stopped
     clarification: null
@@ -411,23 +417,23 @@ queries:
       - a1
       args:
         side: right
-    - *id002
+    - *id001
     assumptions:
     - walking = moving
     clarification: null
-- query_id: ped_near_stopped_bus
-  text: a pedestrian near a stopped bus
+- query_id: ped_near_stopped_truck
+  text: a pedestrian near a stopped truck
   split: heldout
   tier: relational
   gold:
-    query: a pedestrian near a stopped bus
+    query: a pedestrian near a stopped truck
     actors:
     - id: a1
       cls: pedestrian
       sam_prompt: person
     - id: b1
-      cls: bus
-      sam_prompt: bus
+      cls: truck
+      sam_prompt: truck
     predicates:
     - name: exists
       actors:
@@ -447,8 +453,7 @@ queries:
       actors:
       - b1
       args: {}
-    assumptions:
-    - near = within 5 m
+    assumptions: []
     clarification: null
 - query_id: ped_hidden_by_car
   text: a pedestrian partly hidden by a car
@@ -570,16 +575,16 @@ queries:
     - near = within 5 m
     - truck includes pickups (A-123)
     clarification: null
-- query_id: ped_hidden_crossing
-  text: a pedestrian hidden by a car, crossing in front of us
+- query_id: cyclist_hidden_by_car
+  text: a cyclist hidden by a car
   split: heldout
   tier: relational
   gold:
-    query: a pedestrian hidden by a car, crossing in front of us
+    query: a cyclist hidden by a car
     actors:
     - id: a1
-      cls: pedestrian
-      sam_prompt: person
+      cls: cyclist
+      sam_prompt: cyclist
     predicates:
     - name: exists
       actors:
@@ -590,12 +595,7 @@ queries:
       - a1
       args:
         cls: car
-    - name: crossing_ego_path
-      actors:
-      - a1
-      args: {}
-    assumptions:
-    - hidden = a nearer car covers at least 20% of the box
+    assumptions: []
     clarification: null
 - query_id: cyclist_hidden_by_truck
   text: a cyclist partly hidden by a truck
