@@ -73,6 +73,7 @@ def test_concurrent_builders_of_one_clip_all_succeed(scene, tmp_path):
     # A-242: prefetch runs one job per concept, so several workers build the same camera clip at once
     from concurrent.futures import ThreadPoolExecutor
 
+    scene.frames("front_camera")  # the fixture writes its images on first use; real scenes have them on disk
     with ThreadPoolExecutor(max_workers=5) as pool:
         clips = list(
             pool.map(lambda _: build_clip(scene, "front_camera", cache_dir=tmp_path / "clips"), range(5))
