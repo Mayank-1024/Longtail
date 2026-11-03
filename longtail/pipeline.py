@@ -5,8 +5,9 @@ this module does the searching, so a run is the same whether a model or a script
 """
 
 import hashlib
+import os
 from collections.abc import Callable
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -22,6 +23,9 @@ WINDOW_S = 4.0
 STRIDE_S = 2.0
 # ASSUMPTION A-214: scenes are searched by up to 4 worker threads, one scene per worker
 WORKERS = 4
+# ASSUMPTION A-230: before verifying, the SAM calls and mask decoding of every (scene, camera, concept) run in
+# up to this many worker processes (decoding is pure Python, so threads would not help); 0 turns it off
+SAM_WORKERS = int(os.environ.get("LONGTAIL_SAM_WORKERS", "6"))
 
 SceneOpener = Callable[[str], Scene]
 
@@ -90,6 +94,45 @@ def search_scene(spec: ScenarioSpec, scene: Scene, track_source: TrackSource, ru
     return verify_and_record(spec, uniform_windows(scene), scene, track_source, run_dir)
 
 
+def concepts(spec: ScenarioSpec) -> list[str]:
+    """The SAM phrases verify() will ask for: every actor's, and every occluder class's (A-87)."""
+    phrases = {a.sam_prompt for a in spec.actors}
+    for p in spec.predicates:
+        cls = p.args.get("cls")
+        if isinstance(cls, str):
+            phrases.add(next((a.sam_prompt for a in spec.actors if a.cls == cls), cls))
+    return sorted(phrases)
+
+
+def prefetch(
+    spec: ScenarioSpec, scene_ids: list[str], open_scene: SceneOpener, track_source: TrackSource, workers: int
+) -> list[str]:
+    """Fill the track source's caches in parallel; returns the failed jobs (verify() retries them itself).
+
+    Only for a source with a `warm` hook (the SAM one, A-229); anything else is left to verify() as before.
+    """
+    warm = getattr(track_source, "warm", None)
+    if warm is None or workers <= 0:
+        return []
+    allowed = getattr(track_source, "cameras", None)
+    jobs = [
+        (sid, cam, c)
+        for sid in scene_ids
+        for cam in open_scene(sid).cameras
+        if allowed is None or cam in allowed
+        for c in concepts(spec)
+    ]
+    failed = []
+    with ProcessPoolExecutor(max_workers=max(1, min(workers, len(jobs)))) as pool:
+        futures = {pool.submit(warm, *job): job for job in jobs}
+        for f, job in futures.items():
+            try:
+                f.result()
+            except Exception as e:
+                failed.append(f"{'/'.join(job)}: {type(e).__name__}: {e}")
+    return failed
+
+
 def run(
     spec: ScenarioSpec,
     scene_ids: list[str],
@@ -108,6 +151,10 @@ def run(
         except Exception as e:  # one bad scene must not lose the others' results
             return SceneResult(scene_id, None, f"{type(e).__name__}: {e}")
 
+    try:
+        prefetch(spec, scene_ids, open_scene, track_source, SAM_WORKERS)
+    except Exception:  # prefetch only saves time; verify() makes the same calls if it could not
+        pass
     with ThreadPoolExecutor(max_workers=max(1, workers)) as pool:
         scenes = list(pool.map(one, scene_ids))
     return PipelineResult(spec, scenes)

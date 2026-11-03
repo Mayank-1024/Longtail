@@ -200,6 +200,14 @@ class PandaSetScene(Scene):
 
     def lidar(self, ts: float) -> LidarSweep:
         i = index_of(self._lidar_ts, ts, "LiDAR sweep")
+        # ASSUMPTION A-231: each sweep is built once per scene, arrays read-only (verify asked for the same
+        # sweep about 15 times, 0.085 s each); a caller that edits points in place now fails loudly
+        sweeps = self.__dict__.setdefault("_sweeps", {})
+        if i not in sweeps:
+            sweeps[i] = self._build_sweep(i)
+        return sweeps[i]
+
+    def _build_sweep(self, i: int) -> LidarSweep:
         if not self._lidar_loaded:
             # ASSUMPTION A-15: per-modality loader only, never sequence.load()
             self._seq.load_lidar()
@@ -207,7 +215,7 @@ class PandaSetScene(Scene):
             self._seq.lidar.set_sensor(LIDAR_SENSOR_ID)
             self._lidar_loaded = True
         df = self._seq.lidar[i]
-        return LidarSweep(
+        sweep = LidarSweep(
             frame_idx=i,
             ts=float(self._lidar_ts[i]),
             # ASSUMPTION A-18: keep the per-point timestamp t as a fifth column
@@ -216,6 +224,9 @@ class PandaSetScene(Scene):
             sensor_id=df["d"].to_numpy(dtype=np.int8),
             point_index=df.index.to_numpy(dtype=np.int64),
         )
+        for a in (sweep.points, sweep.sensor_id, sweep.point_index):
+            a.flags.writeable = False
+        return sweep
 
     # Labels: reached only through Scene.labels() and Scene.semseg(), which check the guard first.
 

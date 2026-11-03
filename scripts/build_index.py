@@ -20,6 +20,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 
 from longtail.data.guard import eval_ground_truth
 from longtail.data.index import INDEX_PATH, pandaset_root
@@ -59,8 +60,11 @@ def label_stats(scene: PandaSetScene, labels_seen: set[str]) -> dict[str, int]:
         labels_seen.update(df["label"])
         ped = df[df["label"].isin(PEDESTRIAN_LABELS)]
         groups["pedestrians"].update(ped["uuid"])
-        groups["walking"].update(ped.loc[ped["attributes.pedestrian_behavior"] == "Walking", "uuid"])
-        bikes = df[(df["label"] == CYCLIST_LABEL) & (df["attributes.rider_status"] == "With Rider")]
+        # A frame's label table has an attribute column only if some cuboid in it carries that attribute
+        behaviour = df.get("attributes.pedestrian_behavior", pd.Series(index=df.index, dtype=object))
+        groups["walking"].update(ped.loc[behaviour[ped.index] == "Walking", "uuid"])
+        rider = df.get("attributes.rider_status", pd.Series(index=df.index, dtype=object))
+        bikes = df[(df["label"] == CYCLIST_LABEL) & (rider == "With Rider")]
         groups["cyclists"].update(bikes["uuid"])
         groups["vehicles"].update(df.loc[df["label"].isin(VEHICLE_LABELS), "uuid"])
     return {k: len(v) for k, v in groups.items()}
