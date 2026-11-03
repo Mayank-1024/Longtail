@@ -105,7 +105,11 @@ def concepts(spec: ScenarioSpec) -> list[str]:
 
 
 def prefetch(
-    spec: ScenarioSpec, scene_ids: list[str], open_scene: SceneOpener, track_source: TrackSource, workers: int
+    spec: ScenarioSpec | list[ScenarioSpec],
+    scene_ids: list[str],
+    open_scene: SceneOpener,
+    track_source: TrackSource,
+    workers: int,
 ) -> list[str]:
     """Fill the track source's caches in parallel; returns the failed jobs (verify() retries them itself).
 
@@ -120,7 +124,7 @@ def prefetch(
         for sid in scene_ids
         for cam in open_scene(sid).cameras
         if allowed is None or cam in allowed
-        for c in concepts(spec)
+        for c in sorted({c for one in (spec if isinstance(spec, list) else [spec]) for c in concepts(one)})
     ]
     failed = []
     with ProcessPoolExecutor(max_workers=max(1, min(workers, len(jobs)))) as pool:

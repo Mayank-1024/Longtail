@@ -9,6 +9,7 @@ is a miss. Replay mode (LONGTAIL_REPLAY=1) serves only from here, which makes th
 import hashlib
 import json
 import os
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -44,7 +45,8 @@ class ResponseCache:
     def put(self, key: str, value: dict[str, Any]) -> None:
         p = self._path(key)
         p.parent.mkdir(parents=True, exist_ok=True)
-        tmp = p.with_suffix(".tmp")
+        # a name per process and thread: parallel writers of the same key must not share a temp file
+        tmp = p.with_name(f"{p.name}.{os.getpid()}.{threading.get_ident()}.tmp")
         tmp.write_text(json.dumps(value))
         tmp.replace(p)
 

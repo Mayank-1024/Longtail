@@ -16,6 +16,7 @@ import io
 import json
 import re
 import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -256,6 +257,9 @@ def match_query(
     return sorted(matches.values(), key=lambda m: -m["score"]), usd
 
 
+DESCRIBE_WORKERS = 8
+
+
 def run_baseline(
     scenes: list[Scene],
     queries: list[dict[str, str]],
@@ -268,9 +272,10 @@ def run_baseline(
     queries: [{"query_id": ..., "text": ...}]; only the text is sent to the model.
     """
     start = time.perf_counter()
-    windows = [
-        describe_window(s, wid, t0, t1, client, model) for s in scenes for wid, t0, t1 in baseline_windows(s)
-    ]
+    jobs = [(s, wid, t0, t1) for s in scenes for wid, t0, t1 in baseline_windows(s)]
+    # ASSUMPTION A-235: windows are described by up to 8 threads (network-bound calls); results keep job order
+    with ThreadPoolExecutor(max_workers=DESCRIBE_WORKERS) as pool:
+        windows = list(pool.map(lambda j: describe_window(*j, client, model), jobs))
     describe_s = time.perf_counter() - start
     describe_usd = sum(w.list_usd for w in windows)
     share = 1 / max(1, len(queries))

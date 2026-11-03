@@ -12,6 +12,7 @@ gt/<query>.json for the findings, and inside eval_ground_truth() for the model c
 import argparse
 import hashlib
 import json
+import pickle
 import subprocess
 import sys
 import time
@@ -464,6 +465,75 @@ def run_config(config: str, setup: Setup, verifier: bool = True) -> list[QueryOu
     return [score(q, run_query(config, q, setup, verifier), setup, truth) for q in setup.queries]
 
 
+# ASSUMPTION A-233: sharding by scene; each scene runs as its own job (--partial), one merge scores them all.
+# Exact, because run_query() treats scenes independently: NMS is per scene, findings are re-sorted across
+# scenes, claims and list-price costs are per (scene, camera, concept), seconds and windows add up.
+
+PARTIAL_FORMAT = "longtail.ablation_partial/v1"
+
+
+def partial_path(out_dir: Path, config: str, scene_id: str) -> Path:
+    return Path(out_dir) / config / f"{scene_id}.pkl"
+
+
+def write_partial(config: str, setup: Setup, out_dir: Path, verifier: bool = True) -> list[Path]:
+    """run_query() per query on each of setup.scenes alone, saved unscored, one file per scene."""
+    paths = []
+    for scene in setup.scenes:
+        one = Setup(**{**setup.__dict__, "scenes": [scene], "truth_scenes": [scene]})
+        outputs = {q.query_id: run_query(config, q, one, verifier) for q in setup.queries}
+        path = partial_path(out_dir, config, scene.scene_id)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_suffix(".tmp")
+        tmp.write_bytes(
+            pickle.dumps({"format": PARTIAL_FORMAT, "scene_id": scene.scene_id, "outputs": outputs})
+        )
+        tmp.replace(path)
+        paths.append(path)
+    return paths
+
+
+def merge_outputs(parts: list[Output]) -> Output:
+    findings = sorted((f for p in parts for f in p.findings), key=lambda f: (-f.score, f.scene_id, f.t0))
+    extra: dict = {}
+    for p in parts:
+        for k, v in p.extra.items():
+            extra[k] = extra.get(k, 0) + v if isinstance(v, int | float) and v is not None else v
+    return Output(
+        findings,
+        [c for p in parts for c in p.claims],
+        sum(p.cost_usd for p in parts),
+        sum(p.seconds for p in parts),
+        extra,
+    )
+
+
+def read_partials(out_dir: Path, config: str, scene_ids: list[str]) -> dict[str, Output]:
+    """The merged Output per query over scene_ids; every scene must have its partial file."""
+    missing = [s for s in scene_ids if not partial_path(out_dir, config, s).is_file()]
+    if missing:
+        raise FileNotFoundError(f"configuration ({config}): no partial results for scenes {missing}")
+    per_query: dict[str, list[Output]] = defaultdict(list)
+    for sid in scene_ids:
+        doc = pickle.loads(partial_path(out_dir, config, sid).read_bytes())
+        if doc.get("format") != PARTIAL_FORMAT:
+            raise ValueError(f"{sid}: not a {PARTIAL_FORMAT} file")
+        for qid, out in doc["outputs"].items():
+            per_query[qid].append(out)
+    return {qid: merge_outputs(parts) for qid, parts in per_query.items()}
+
+
+def merge_config(config: str, setup: Setup, out_dir: Path) -> list[QueryOutcome]:
+    merged = read_partials(out_dir, config, [s.scene_id for s in setup.scenes])
+    truth = _Truth(setup)
+    outcomes = []
+    for q in setup.queries:
+        if q.query_id not in merged:
+            raise FileNotFoundError(f"configuration ({config}): the partial results have no {q.query_id}")
+        outcomes.append(score(q, merged[q.query_id], setup, truth))
+    return outcomes
+
+
 # Results
 
 
@@ -643,7 +713,11 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--scenes", nargs="*", help="scene ids (default: every scene in the index)")
     ap.add_argument("--out", type=Path, default=RESULTS_DIR)
     ap.add_argument("--replay", action="store_true", help="SAM responses from the cache only (no paid calls)")
+    ap.add_argument("--partial", type=Path, help="run each scene alone and save it unscored here (A-233)")
+    ap.add_argument("--merge", type=Path, help="score the partial results saved here instead of running")
     args = ap.parse_args(argv)
+    if args.partial and args.merge:
+        ap.error("--partial and --merge are separate steps")
     from longtail.eval.cli import _scenes
 
     scenes = _scenes(args.scenes)
@@ -655,7 +729,21 @@ def main(argv: list[str] | None = None) -> int:
         source=sam_source(args.replay),
     )
     try:
-        outcomes = run_config(args.config, setup)
+        if args.partial:
+            if args.config in ("b", "c"):
+                from longtail.pipeline import SAM_WORKERS, prefetch
+
+                by_id = {s.scene_id: s for s in setup.scenes}
+                for failed in prefetch(
+                    [q.gold for q in setup.queries], list(by_id), by_id.__getitem__, setup.source, SAM_WORKERS
+                ):
+                    print(f"prefetch failed (run_query retries it): {failed}", file=sys.stderr)
+            for path in write_partial(args.config, setup, args.partial):
+                print(f"partial written to {path}")
+            return 0
+        outcomes = (
+            merge_config(args.config, setup, args.merge) if args.merge else run_config(args.config, setup)
+        )
     except formats.WaitingOnError as e:
         print(e, file=sys.stderr)
         return 3

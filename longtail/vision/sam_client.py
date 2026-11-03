@@ -11,6 +11,7 @@ replaces this one (no second layer).
 import hashlib
 import json
 import os
+import threading
 import time
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
@@ -51,6 +52,14 @@ class SamTransport(Protocol):
         """Start one streamed request and yield its output text deltas."""
 
 
+def _atomic_write(path: Path, text: str) -> None:
+    """Write via a temp file named per process and thread, then rename, so readers never see half a file."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(f"{path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
+    tmp.write_text(text)
+    tmp.replace(path)
+
+
 def billed_usd(frames: int) -> float:
     return max(frames, MIN_BILLED_FRAMES) * USD_PER_FRAME
 
@@ -60,7 +69,9 @@ class Ledger:
 
     # ASSUMPTION A-116: ledger lines go to runs/ledger.jsonl, the file the plan gives M1's client
     def __init__(self, path: Path | None = None) -> None:
-        self.path = Path(path) if path is not None else Path("runs") / "ledger.jsonl"
+        from longtail.llm.ledger import ledger_path  # A-234: LONGTAIL_LEDGER
+
+        self.path = Path(path) if path is not None else ledger_path()
 
     def record(self, **entry: object) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -123,15 +134,22 @@ class SamClient:
 
     def file_id(self, clip: Clip) -> str:
         """Upload a clip once; later calls reuse the cached file id."""
-        known = json.loads(self._files_path().read_text()) if self._files_path().is_file() else {}
+        known = self._known_files()
         if clip.index.clip_id in known:
             return known[clip.index.clip_id]
         transport = self._transport()
         file_id, _ = self._with_retries(lambda: transport.upload(clip.path))
-        known[clip.index.clip_id] = file_id
-        self._files_path().parent.mkdir(parents=True, exist_ok=True)
-        self._files_path().write_text(json.dumps(known, indent=1))
+        # ASSUMPTION A-236: many processes share this file on Explorer; re-read, merge and replace atomically
+        # (a lost entry only means one more free upload, never a wrong file id)
+        known = {**self._known_files(), clip.index.clip_id: file_id}
+        _atomic_write(self._files_path(), json.dumps(known, indent=1))
         return str(file_id)
+
+    def _known_files(self) -> dict[str, str]:
+        try:
+            return json.loads(self._files_path().read_text())
+        except (FileNotFoundError, json.JSONDecodeError):
+            return {}
 
     def _transport(self) -> SamTransport:
         if self.replay:
@@ -183,8 +201,7 @@ class SamClient:
 
         text, attempts = self._with_retries(run)
         usd = billed_usd(frames)
-        cached.parent.mkdir(parents=True, exist_ok=True)
-        cached.write_text(str(text))
+        _atomic_write(cached, str(text))
         latency = time.perf_counter() - start
         self.ledger.record(**common, usd=usd, cache_hit=False, latency_s=round(latency, 3), attempts=attempts)
         return SamCall(str(text), clip.index.clip_id, concept, frames, usd, False, attempts)

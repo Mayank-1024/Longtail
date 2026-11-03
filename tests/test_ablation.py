@@ -313,3 +313,37 @@ def test_scene_wrappers():
     assert np.allclose(late.ego_pose(t0 + 0.2), s.ego_pose(t0))
     with eval_ground_truth():
         assert list(late.labels(0)["uuid"]) == list(s.labels(0)["uuid"])
+
+
+# Sharding by scene (A-233)
+
+
+def test_partial_runs_per_scene_merge_to_the_same_scores_as_one_run(tmp_path):
+    a = SyntheticScene(SyntheticConfig(hidden_pedestrian=True), scene_id="syn-a")
+    b = SyntheticScene(SyntheticConfig(), scene_id="syn-b")
+    ghosts = {"person": [_ghost(a, "left_camera", "person", 90, (220, 160, 420, 320))]}
+    sources = {
+        "syn-a": track_source(a, {"person": ["crosser", "hidden_ped"], "car": ["parked"]}, ghosts),
+        "syn-b": track_source(b, {"person": ["crosser"], "car": ["parked"]}),
+    }
+
+    def source(scene, camera, concept):
+        return sources[scene.scene_id](scene, camera, concept)
+
+    gt_dir = tmp_path / "gt"
+    with eval_ground_truth():
+        gt.build(QUERIES, [a, b], gt_dir)
+    setup = ablation.Setup(queries=QUERIES, scenes=[a, b], truth_scenes=[a, b], gt_dir=gt_dir, source=source)
+    for config in ("b", "c"):
+        whole = ablation.run_config(config, setup)
+        paths = ablation.write_partial(config, setup, tmp_path / "partial")
+        assert [p.name for p in paths] == ["syn-a.pkl", "syn-b.pkl"]
+        merged = ablation.merge_config(config, setup, tmp_path / "partial")
+        # wall time differs between runs; the cost only in float summation order
+        strip = lambda o: {**o.__dict__, "seconds": None, "cost_usd": round(o.cost_usd, 9)}  # noqa: E731
+        for m, w in zip(merged, whole, strict=True):
+            diff = {k: (v, strip(w)[k]) for k, v in strip(m).items() if v != strip(w)[k]}
+            assert not diff, (m.query_id, diff)
+        assert M.summarise(merged)["p_at_10"] == M.summarise(whole)["p_at_10"]
+    with pytest.raises(FileNotFoundError, match="syn-c"):
+        ablation.read_partials(tmp_path / "partial", "c", ["syn-a", "syn-c"])
