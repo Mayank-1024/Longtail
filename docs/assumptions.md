@@ -143,5 +143,6 @@ Choices the build plan does not fix, made before the contracts session so work c
 | A-224 | The web view's offline-demo mode uses synthetic scenes and a scripted model (api/demo.py) with a banner on every page; it is for building the UI only, never for footage, numbers or claims. | M | ASSUMED | `api/demo.py` |
 | A-225 | A finding's visual export (C9) runs on its first detail view, for every finding of that scene's run at once, and is reused afterwards. | M | ASSUMED | `api/server.py` |
 | A-226 | Spark Open reasons before answering and the reasoning counts against `max_tokens` (first live call: 262 reasoning tokens for a 7-token answer). Every Baseten call asks for `reasoning_effort: low` (cut that call to 65 output tokens) and gets 1,500 tokens of headroom above its answer limit. | M | ASSUMED | `longtail/llm/baseten.py` |
+| A-227 | The Hugging Face mirror `georghess/pandaset` is one zip whose members are `pandaset/<scene>/...` and whose CDN answers byte-range requests, so single files can be fetched without the whole 44.5 GB (checked 2026-11-03: 103 scenes, 75,758 files; labels for all scenes 0.12 GB in about 4 min; one full scene 0.44 GB in 20 s). | M | CONFIRMED | `scripts/fetch_pandaset.py` |
 
 IDs A-201 and up are Mayank's, so they never collide with Chethan's IDs on open branches.
