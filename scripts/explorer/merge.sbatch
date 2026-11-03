@@ -25,6 +25,13 @@ for SET in all index30; do
         --split $SPLIT --scenes $SCENES --merge results_partial --out longtail/eval/runs/$SET-$SPLIT/results \
         || echo "merge $SET $SPLIT $C failed"
     done
+    # Configuration (a): the Spark Open baseline was run on the laptop over this same scene set (A-241) and
+    # copied to runs/baseline_a_$SET; scoring it only checks its cited boxes against the LiDAR, no paid calls.
+    if [ -f runs/baseline_a_$SET/rankings.json ]; then
+      uv run --no-sync python -m longtail.eval.ablation --config a --queries longtail/eval/queries/queries.yaml \
+        --split $SPLIT --scenes $SCENES --baseline-dir runs/baseline_a_$SET \
+        --out longtail/eval/runs/$SET-$SPLIT/results || echo "config a $SET $SPLIT failed"
+    fi
     uv run --no-sync python -m longtail.eval.breaks --queries longtail/eval/queries/queries.yaml \
       --split $SPLIT --scenes $SCENES --merge results_partial --out longtail/eval/runs/$SET-$SPLIT/results \
       || echo "breaks $SET $SPLIT failed"

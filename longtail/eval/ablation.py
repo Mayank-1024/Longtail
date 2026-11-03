@@ -754,6 +754,12 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--replay", action="store_true", help="SAM responses from the cache only (no paid calls)")
     ap.add_argument("--partial", type=Path, help="run each scene alone and save it unscored here (A-233)")
     ap.add_argument("--merge", type=Path, help="score the partial results saved here instead of running")
+    ap.add_argument(
+        "--baseline-dir",
+        type=Path,
+        default=formats.BASELINE_DIR,
+        help="configuration (a): the baseline run over these same scenes, so its cost is theirs alone",
+    )
     args = ap.parse_args(argv)
     if args.partial and args.merge:
         ap.error("--partial and --merge are separate steps")
@@ -766,6 +772,7 @@ def main(argv: list[str] | None = None) -> int:
         truth_scenes=scenes,
         gt_dir=args.gt_dir,
         source=sam_source(args.replay),
+        baseline_dir=args.baseline_dir,
     )
     try:
         if args.partial:
