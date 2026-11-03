@@ -32,7 +32,13 @@ def test_labels_behind_guard(scene):
     with pytest.raises(LabelAccessError):
         scene.labels(0)
     with eval_ground_truth():
-        assert {o["name"] for o in scene.labels(0)} == {"crosser", "parked"}
+        cuboids = scene.labels(0)
+    # PandaSet's cuboid columns (A-130)
+    assert set(cuboids["uuid"]) == {"crosser", "parked"}
+    assert dict(zip(cuboids["uuid"], cuboids["label"], strict=True)) == {
+        "crosser": "Pedestrian",
+        "parked": "Car",
+    }
 
 
 def test_every_part_is_present(scene):

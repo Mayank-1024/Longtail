@@ -22,7 +22,7 @@ import numpy as np
 from longtail.data.base import CameraFrame, LidarSweep, Scene, SceneMeta, index_of
 from longtail.geometry.transforms import apply, make_pose, rot_z
 
-GROUND, WALL, CROSSER, PARKED, PED_A, PED_B, PASS_CAR, CAR_A, CAR_B = 0, 1, 2, 3, 4, 5, 6, 7, 8
+GROUND, WALL, CROSSER, PARKED, PED_A, PED_B, PASS_CAR, CAR_A, CAR_B, HIDDEN_PED = range(10)
 OBJECT_IDS = {
     "crosser": CROSSER,
     "parked": PARKED,
@@ -31,6 +31,18 @@ OBJECT_IDS = {
     "pass_car": PASS_CAR,
     "car_a": CAR_A,
     "car_b": CAR_B,
+    "hidden_ped": HIDDEN_PED,
+}
+# PandaSet label strings for the synthetic objects' cuboids (C7 reads them through labels()).
+PANDASET_LABELS = {
+    "crosser": "Pedestrian",
+    "ped_a": "Pedestrian",
+    "ped_b": "Pedestrian",
+    "hidden_ped": "Pedestrian",
+    "parked": "Car",
+    "pass_car": "Car",
+    "car_a": "Car",
+    "car_b": "Car",
 }
 
 # ASSUMPTION A-44: synthetic rig of six pinhole cameras with PandaSet names, yawed about the ego up axis
@@ -95,6 +107,14 @@ class SyntheticConfig:
     nose_to_tail_center: tuple[float, float] = (4.0, 4.0)
     nose_to_tail_gap_m: float = 0.3
     nose_to_tail_lwh: tuple[float, float, float] = (4.5, 1.8, 1.5)
+    # ASSUMPTION A-130: optional pedestrian standing behind the parked car, its head above the roof (C7 tests)
+    hidden_pedestrian: bool = False
+    hidden_ped_center: tuple[float, float] = (19.0, -5.0)
+    hidden_ped_lwh: tuple[float, float, float] = (0.5, 0.5, 1.75)
+    # ASSUMPTION A-130: moving objects' cuboids come in sibling pairs (sensor 0 and 1), as PandaSet labels the
+    # overlap of its two LiDARs; the sensor-1 copy is offset by sibling_offset_m along the object's length
+    label_siblings: bool = False
+    sibling_offset_m: float = 0.1
 
 
 @dataclass(frozen=True)
@@ -220,6 +240,13 @@ class SyntheticScene(Scene):
                     yaw=c.ego_yaw_rad + np.pi / 2,
                     velocity_world=np.zeros(3),
                 )
+        if c.hidden_pedestrian:
+            objs["hidden_ped"] = SyntheticObject(
+                center_world=self._on_ground(*c.hidden_ped_center, c.hidden_ped_lwh[2] / 2),
+                lwh=c.hidden_ped_lwh,
+                yaw=c.ego_yaw_rad,
+                velocity_world=np.zeros(3),
+            )
         if c.pedestrian_pair:
             ahead, left = c.pair_center
             for name, side in (("ped_a", -0.5), ("ped_b", 0.5)):
@@ -303,11 +330,55 @@ class SyntheticScene(Scene):
     def image_size(self, camera: str) -> tuple[int, int]:
         return self.cfg.image_size
 
-    def _labels(self, frame_idx: int) -> list[dict]:
-        objs = self.objects(self._lidar_ts[frame_idx])
-        return [
-            {"name": k, "center_world": o.center_world, "lwh": o.lwh, "yaw": o.yaw} for k, o in objs.items()
-        ]
+    def _labels(self, frame_idx: int):
+        """The true boxes as cuboids in PandaSet's schema (devkit Cuboids docstring), uuid = object name."""
+        import pandas as pd
+
+        # ASSUMPTION A-130: synthetic cuboids follow PandaSet's columns: yaw 0 points the length along +y,
+        # dimensions.x is the width and dimensions.y the length; attributes follow each object's motion
+        rows = []
+        for name, o in self.objects(self._lidar_ts[frame_idx]).items():
+            label = PANDASET_LABELS[name]
+            moving = bool(np.linalg.norm(o.velocity_world) > 0)
+            row = {
+                "uuid": name,
+                "label": label,
+                "yaw": o.yaw - np.pi / 2,
+                "stationary": not moving,
+                "camera_used": -1,
+                "position.x": o.center_world[0],
+                "position.y": o.center_world[1],
+                "position.z": o.center_world[2],
+                "dimensions.x": o.lwh[1],
+                "dimensions.y": o.lwh[0],
+                "dimensions.z": o.lwh[2],
+                "attributes.object_motion": None
+                if label == "Pedestrian"
+                else ("Moving" if moving else "Parked"),
+                "cuboids.sibling_id": None,
+                "cuboids.sensor_id": -1,
+                "attributes.rider_status": None,
+                "attributes.pedestrian_behavior": ("Walking" if moving else "Standing")
+                if label == "Pedestrian"
+                else None,
+                "attributes.pedestrian_age": "Adult" if label == "Pedestrian" else None,
+            }
+            if moving and self.cfg.label_siblings:
+                twin = dict(row)
+                shift = rot_z(o.yaw)[:, 0] * self.cfg.sibling_offset_m
+                twin.update(
+                    {
+                        "uuid": f"{name}~front",
+                        "position.x": o.center_world[0] + shift[0],
+                        "position.y": o.center_world[1] + shift[1],
+                        "cuboids.sensor_id": 1,
+                        "cuboids.sibling_id": name,
+                    }
+                )
+                row.update({"cuboids.sensor_id": 0, "cuboids.sibling_id": twin["uuid"]})
+                rows.append(twin)
+            rows.append(row)
+        return pd.DataFrame(rows)
 
     def _semseg(self, frame_idx: int) -> np.ndarray:
         return self._sweep(frame_idx)[1]

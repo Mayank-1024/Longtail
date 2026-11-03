@@ -4,6 +4,7 @@ A predicate is evaluated per frame (each LiDAR sweep in the window) and returns 
 turns the frames into one PredicateResult (contracts.py) for the window.
 """
 
+import importlib
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import StrEnum
@@ -87,9 +88,19 @@ class Context:
     frames: np.ndarray  # sweep timestamps in the window
     # Tracked objects of a class, for occluded_by; filled lazily by the engine.
     pool: Callable[[str], list[TrackedObject]] = field(default=lambda cls: [])
+    # ASSUMPTION A-120: predicates replaced by name (C7 label geometry); empty in the verifier
+    overrides: dict[str, Callable[["Context", list[TrackedObject], dict[str, Any]], list[FrameResult]]] = (
+        field(default_factory=dict)
+    )
     _ego: EgoMotion | None = None
     _corridors: dict[float, Corridor] = field(default_factory=dict)
     _skips: dict[int, dict[float, str]] = field(default_factory=dict)
+
+    def evaluate(self, name: str, objs: list[TrackedObject], args: dict[str, Any]) -> list[FrameResult]:
+        """One predicate's per-frame results, through an override when one is set."""
+        if name in self.overrides:
+            return self.overrides[name](self, objs, args)
+        return importlib.import_module(f"longtail.verify.predicates.{name}").evaluate(self, objs, args)
 
     @property
     def ego(self) -> EgoMotion:
