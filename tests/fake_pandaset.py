@@ -35,7 +35,7 @@ def _dump(path: Path, obj) -> None:
 def write_sequence(
     root: Path, seq_id: str = "001", n_frames: int = 3, t0: float = T0, semseg: bool = True
 ) -> Path:
-    """Write a sequence where the Pandar64 moves 1 m per frame along world -y with identity heading."""
+    """Write a sequence where the Pandar64 moves 1 m per frame along world +y with identity heading."""
     seq = root / seq_id
     lidar_ts = [t0 + 0.1 * k for k in range(n_frames)]
     for k, ts in enumerate(lidar_ts):
@@ -53,7 +53,7 @@ def write_sequence(
         (seq / "lidar").mkdir(parents=True, exist_ok=True)
         df.to_pickle(seq / "lidar" / f"{k:02d}.pkl.gz")
     _dump(seq / "lidar" / "timestamps.json", lidar_ts)
-    _dump(seq / "lidar" / "poses.json", [yaw_pose(0.0, -1.0 * k, 1.8, 0.0) for k in range(n_frames)])
+    _dump(seq / "lidar" / "poses.json", [yaw_pose(0.0, 1.0 * k, 1.8, 0.0) for k in range(n_frames)])
 
     for c, cam in enumerate(CAMERAS):
         d = seq / "camera" / cam
