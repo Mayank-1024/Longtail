@@ -105,3 +105,37 @@ def test_prefetch_is_a_no_op_without_a_warm_hook_or_with_zero_workers(tmp_path, 
         source.warm = functools.partial(_touch, str(tmp_path))
         assert prefetch(_spec(), ["001"], lambda sid: _Scene(), source, workers=0) == []
         assert not list(tmp_path.iterdir())
+
+
+class _Recorder:
+    def __init__(self) -> None:
+        self.calls = []
+
+    def upload(self, path):
+        self.calls.append("upload")
+        return "file-1"
+
+    def stream(self, **kwargs):
+        self.calls.append("stream")
+        return iter(["ok"])
+
+
+def test_real_sam_transport_obeys_the_paid_gate_and_spend_cap(tmp_path, monkeypatch):
+    import json
+
+    from longtail.llm.client import BudgetExceeded, PaidCallsDisabled
+    from longtail.vision.sam_client import SAM_CALL_ESTIMATE_USD, GatedTransport
+
+    ledger = tmp_path / "ledger.jsonl"
+    inner = _Recorder()
+    gated = GatedTransport(inner, ledger)
+    monkeypatch.delenv("LONGTAIL_ALLOW_PAID", raising=False)
+    with pytest.raises(PaidCallsDisabled):
+        gated.stream(model="sam-3.1")
+    monkeypatch.setenv("LONGTAIL_ALLOW_PAID", "1")
+    monkeypatch.setenv("LONGTAIL_SPEND_CAP_USD", "1.00")
+    assert gated.upload(Path("x.mp4")) == "file-1" and list(gated.stream(model="sam-3.1")) == ["ok"]
+    ledger.write_text(json.dumps({"usd": 1.0 - SAM_CALL_ESTIMATE_USD / 2}) + "\n")
+    with pytest.raises(BudgetExceeded):
+        gated.stream(model="sam-3.1")
+    assert inner.calls == ["upload", "stream"]

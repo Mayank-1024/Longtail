@@ -235,6 +235,39 @@ class MetaTransport:
             raise TransportError(e.status_code, str(e)) from e
 
 
+# ASSUMPTION A-232: real SAM calls obey the M1 paid-call gate and spend cap (A-206) over the shared ledger;
+# each stream is costed up front at one 80-frame PandaSet clip, the most a clip here is billed
+SAM_CALL_ESTIMATE_USD = billed_usd(80)
+
+
+class GatedTransport:
+    """The real transport behind LONGTAIL_ALLOW_PAID=1 and LONGTAIL_SPEND_CAP_USD, like every M1 call."""
+
+    def __init__(self, inner: SamTransport, ledger_path: Path | None = None) -> None:
+        self.inner, self.ledger_path = inner, ledger_path
+
+    def _check(self, estimate: float) -> None:
+        from longtail.llm.client import DEFAULT_SPEND_CAP_USD, BudgetExceeded, PaidCallsDisabled
+        from longtail.llm.ledger import Ledger as SpendLedger
+
+        if os.environ.get("LONGTAIL_ALLOW_PAID") != "1":
+            raise PaidCallsDisabled("paid calls are off: set LONGTAIL_ALLOW_PAID=1 (or use replay)")
+        cap = float(os.environ.get("LONGTAIL_SPEND_CAP_USD") or DEFAULT_SPEND_CAP_USD)
+        spent = SpendLedger(self.ledger_path).total_usd()
+        if spent + estimate > cap:
+            raise BudgetExceeded(
+                f"SAM call of ${estimate:.4f} would pass the spend cap (${spent:.4f} of ${cap:.2f})"
+            )
+
+    def upload(self, path: Path) -> str:
+        self._check(0.0)
+        return self.inner.upload(path)
+
+    def stream(self, **kwargs) -> Iterator[str]:
+        self._check(SAM_CALL_ESTIMATE_USD)
+        return self.inner.stream(**kwargs)
+
+
 def transport_from_env() -> SamTransport | None:
     key = os.environ.get("MODEL_API_KEY", "").strip()
-    return MetaTransport(key) if key else None
+    return GatedTransport(MetaTransport(key)) if key else None
