@@ -37,12 +37,13 @@ CAMERA_ORDER = (
     "back_camera",
 )
 
-# ASSUMPTION A-25: the Pandar64 frame has forward = -y, left = +x, up = +z, and the ego origin is the Pandar64
-# origin. Columns are the ego axes (x forward, y left, z up) written in the Pandar64 frame.
+# ASSUMPTION A-25: the Pandar64 frame (lidar/poses.json) has forward = +y, left = -x, up = +z; the ego origin
+# is the Pandar64 origin. Measured on scene 001: travel is along +y, the front camera looks along +y, the left
+# camera along -x. Columns are the ego axes (x forward, y left, z up) written in the Pandar64 frame.
 _R_P64_FROM_EGO = np.array(
     [
-        [0.0, 1.0, 0.0],
-        [-1.0, 0.0, 0.0],
+        [0.0, -1.0, 0.0],
+        [1.0, 0.0, 0.0],
         [0.0, 0.0, 1.0],
     ]
 )
