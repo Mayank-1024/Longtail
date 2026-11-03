@@ -124,9 +124,18 @@ def _lower(base: float | None, broken: float | None) -> bool | None:
     return broken < base - 1e-9
 
 
-def run_breaks(setup: ablation.Setup, split: str) -> dict:
-    """Configuration (c) clean and under each break, with which metrics dropped and any hole."""
-    base = summarise(ablation.run_config("c", setup))
+def run_breaks(setup: ablation.Setup, split: str, outcomes=None) -> dict:
+    """Configuration (c) clean and under each break, with which metrics dropped and any hole.
+
+    outcomes(name, setup, verifier) gives the scored outcomes of (c) for "clean" or a break; by default it
+    runs them, and merge_outcomes() reads the per-scene partial results instead (A-233).
+    """
+    if outcomes is None:
+
+        def outcomes(name, s, verifier):
+            return ablation.run_config("c", s, verifier=verifier)
+
+    base = summarise(outcomes("clean", setup, True))
     out: dict[str, Any] = {
         "format": "longtail.breaks/v1",
         "commit": ablation.git_commit(),
@@ -140,7 +149,7 @@ def run_breaks(setup: ablation.Setup, split: str) -> dict:
     }
     for name in BREAKS:
         s, verifier = broken_setup(name, setup)
-        m = summarise(ablation.run_config("c", s, verifier=verifier))
+        m = summarise(outcomes(name, s, verifier))
         lowered = {k: _lower(base[k]["value"], m[k]["value"]) for k in COMPARED}
         # ASSUMPTION A-141: a break passes when precision, the catch rate or recall drops, and records which;
         # one that lowers none is a hole in the evaluation
@@ -152,6 +161,27 @@ def run_breaks(setup: ablation.Setup, split: str) -> dict:
     return out
 
 
+def break_dir(root: Path, name: str) -> Path:
+    """Partial results of one break; the clean run's are the ablation's own (config c under root)."""
+    return Path(root) if name == "clean" else Path(root) / "breaks" / name
+
+
+def write_break_partials(setup: ablation.Setup, root: Path) -> list[Path]:
+    """(c) under every break, one scene per file; the clean run comes from the ablation's own partial job."""
+    paths = []
+    for name in BREAKS:
+        s, verifier = broken_setup(name, setup)
+        paths += ablation.write_partial("c", s, break_dir(root, name), verifier)
+    return paths
+
+
+def merge_outcomes(root: Path):
+    def outcomes(name, s, verifier):
+        return ablation.merge_config("c", s, break_dir(root, name))
+
+    return outcomes
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="python -m longtail.eval.breaks", description=__doc__.splitlines()[0])
     ap.add_argument("--queries", type=Path, required=True, help="queries file (A-128)")
@@ -160,6 +190,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--scenes", nargs="*", help="scene ids (default: every scene in the index)")
     ap.add_argument("--out", type=Path, default=ablation.RESULTS_DIR)
     ap.add_argument("--replay", action="store_true", help="SAM responses from the cache only (no paid calls)")
+    ap.add_argument(
+        "--partial", type=Path, help="run the breaks per scene, unscored, under this root (A-233)"
+    )
+    ap.add_argument("--merge", type=Path, help="score the partial results under this root instead of running")
     args = ap.parse_args(argv)
     from longtail.eval.cli import _scenes
 
@@ -171,7 +205,11 @@ def main(argv: list[str] | None = None) -> int:
         gt_dir=args.gt_dir,
         source=ablation.sam_source(args.replay),
     )
-    report = run_breaks(setup, args.split)
+    if args.partial:
+        for path in write_break_partials(setup, args.partial):
+            print(f"partial written to {path}")
+        return 0
+    report = run_breaks(setup, args.split, merge_outcomes(args.merge) if args.merge else None)
     out = ablation.check_results_dir(args.out)
     out.mkdir(parents=True, exist_ok=True)
     (out / "breaks.json").write_text(json.dumps(report, indent=1) + "\n")

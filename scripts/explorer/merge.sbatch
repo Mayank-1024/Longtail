@@ -24,5 +24,8 @@ for SET in all103 index30; do
         --split $SPLIT --scenes $SCENES --merge results_partial --out longtail/eval/runs/$SET-$SPLIT/results \
         || echo "merge $SET $SPLIT $C failed"
     done
+    uv run --no-sync python -m longtail.eval.breaks --queries longtail/eval/queries/queries.yaml \
+      --split $SPLIT --scenes $SCENES --merge results_partial --out longtail/eval/runs/$SET-$SPLIT/results \
+      || echo "breaks $SET $SPLIT failed"
   done
 done

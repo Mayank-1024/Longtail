@@ -220,6 +220,44 @@ def run_b(spec: ScenarioSpec, scene: Scene, windows: list[CandidateWindow], sour
 # (c): the verifier
 
 
+class SharedTrackPool(TrackPool):
+    """A query's TrackPool whose tracked objects come from a store shared by every query on the same scene.
+
+    The query still sees only the (concept, class, cameras) entries it asks for, so its findings, claims
+    (pool_claims) and metered SAM calls are the same as with a pool of its own; only the association and
+    tracking work (C4, C5) is done once per scene instead of once per query.
+    """
+
+    # ASSUMPTION A-238: tracked objects depend only on the scene object, the track source and the config: one
+    # store per (scene, source, config) serves every query; a broken scene (breaks.py) is another scene object
+    _stores: dict[tuple[int, int], tuple[Scene, object, VerifyConfig, dict]] = {}
+
+    def __init__(self, scene: Scene, source: TrackSource, cfg: VerifyConfig) -> None:
+        super().__init__(scene, source, cfg)
+        inner = source.source if isinstance(source, MeteredSource) else source  # a meter is per query
+        key = (id(scene), id(inner))
+        held = self._stores.get(key)
+        if held is None or held[0] is not scene or held[1] is not inner or held[2] != cfg:
+            held = self._stores[key] = (scene, inner, cfg, {})
+        self._store = held[3]
+
+    def get(self, concept: str, cls: str, cameras: tuple[str, ...]) -> list:
+        key = (concept, cls, cameras)
+        if key not in self._cache and key in self._store:
+            for cam in cameras:  # the same SAM requests an unshared pool would make, for metering
+                self.source(self.scene, cam, concept)
+            self._cache[key] = self._store[key]
+        objs = super().get(concept, cls, cameras)
+        self._store.setdefault(key, objs)
+        return objs
+
+    @classmethod
+    def release(cls, scene: Scene) -> None:
+        """Forget a scene's stores after its last query, so a long run does not hold every scene's tracks."""
+        for key in [k for k in cls._stores if k[0] == id(scene)]:
+            del cls._stores[key]
+
+
 def run_c(
     spec: ScenarioSpec,
     scene: Scene,
@@ -229,7 +267,7 @@ def run_c(
     verifier: bool = True,
 ) -> tuple[list[gt.ScoredFinding], TrackPool]:
     """verify() on the windows; only verified findings, unless the verifier is switched off (a break)."""
-    pool = TrackPool(scene, source, cfg)
+    pool = SharedTrackPool(scene, source, cfg)
     found = verify(spec, windows, scene, track_source=source, cfg=cfg, pool=pool)
     kept = [f for f in found if f.verified or not verifier]
     return [gt.scored_finding(f, pool) for f in kept], pool
@@ -482,6 +520,7 @@ def write_partial(config: str, setup: Setup, out_dir: Path, verifier: bool = Tru
     for scene in setup.scenes:
         one = Setup(**{**setup.__dict__, "scenes": [scene], "truth_scenes": [scene]})
         outputs = {q.query_id: run_query(config, q, one, verifier) for q in setup.queries}
+        SharedTrackPool.release(scene)
         path = partial_path(out_dir, config, scene.scene_id)
         path.parent.mkdir(parents=True, exist_ok=True)
         tmp = path.with_suffix(".tmp")

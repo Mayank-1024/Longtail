@@ -24,7 +24,9 @@ SAM_MODEL = "sam-3.1"
 # Plan 3: $0.20 per 1,000 frames, 50-frame minimum per request.
 USD_PER_FRAME = 0.20 / 1000
 MIN_BILLED_FRAMES = 50
-RETRY_STATUS = frozenset({429, 500, 502, 503, 504})
+# 599 stands for a connection error or timeout (A-239): no HTTP status, but worth retrying like a 503
+CONNECTION_ERROR_STATUS = 599
+RETRY_STATUS = frozenset({429, 500, 502, 503, 504, CONNECTION_ERROR_STATUS})
 # ASSUMPTION A-115: up to 4 retries, backoff 1 s doubling (1, 2, 4, 8 s), on 429 and 5xx only
 MAX_RETRIES = 4
 BACKOFF_S = 1.0
@@ -216,11 +218,12 @@ class MetaTransport:
     # ASSUMPTION A-117: the real transport follows plan 3.1 (files.create, responses.stream, metadata)
     def __init__(self, api_key: str, base_url: str = "https://api.meta.ai/v1") -> None:
         try:
-            from openai import APIStatusError, OpenAI
+            from openai import APIConnectionError, APIStatusError, OpenAI
         except ImportError as e:  # not a project dependency until M1 adds it
             raise RuntimeError("the openai package is needed: uv run --with openai ...") from e
         self._client = OpenAI(api_key=api_key, base_url=base_url)
         self._status_error = APIStatusError
+        self._connection_error = APIConnectionError  # includes timeouts
 
     def upload(self, path: Path) -> str:
         try:
@@ -228,6 +231,9 @@ class MetaTransport:
                 return self._client.files.create(file=f, purpose="user_data").id
         except self._status_error as e:
             raise TransportError(e.status_code, str(e)) from e
+        except self._connection_error as e:
+            # ASSUMPTION A-239: a dropped connection is retried like a 503 (a retry restarts the whole stream)
+            raise TransportError(CONNECTION_ERROR_STATUS, str(e)) from e
 
     def stream(self, *, model: str, file_id: str, concept: str, include_confidence: bool) -> Iterator[str]:
         content = [{"type": "input_text", "text": concept}, {"type": "input_video", "file_id": file_id}]
@@ -250,6 +256,9 @@ class MetaTransport:
                             yield part.text
         except self._status_error as e:
             raise TransportError(e.status_code, str(e)) from e
+        except self._connection_error as e:
+            # ASSUMPTION A-239: a dropped connection is retried like a 503 (a retry restarts the whole stream)
+            raise TransportError(CONNECTION_ERROR_STATUS, str(e)) from e
 
 
 # ASSUMPTION A-232: real SAM calls obey the M1 paid-call gate and spend cap (A-206) over the shared ledger;

@@ -347,3 +347,30 @@ def test_partial_runs_per_scene_merge_to_the_same_scores_as_one_run(tmp_path):
         assert M.summarise(merged)["p_at_10"] == M.summarise(whole)["p_at_10"]
     with pytest.raises(FileNotFoundError, match="syn-c"):
         ablation.read_partials(tmp_path / "partial", "c", ["syn-a", "syn-c"])
+
+
+def test_shared_track_store_gives_the_same_outcomes_as_a_pool_per_query(setup, monkeypatch):
+    # ASSUMPTION A-238: sharing association work across queries changes no finding, claim or cost
+    shared = ablation.run_config("c", setup)
+    monkeypatch.setattr(ablation, "SharedTrackPool", ablation.TrackPool)
+    alone = ablation.run_config("c", setup)
+    for s, a in zip(shared, alone, strict=True):
+        diff = {k: v for k, v in s.__dict__.items() if k != "seconds" and v != a.__dict__[k]}
+        assert not diff, (s.query_id, diff)
+
+
+def _values(metrics: dict) -> dict:
+    """Metric values without wall time, which differs between runs."""
+    return {k: v["value"] if isinstance(v, dict) else v for k, v in metrics.items() if "seconds" not in k}
+
+
+def test_break_partials_merge_to_the_same_report(setup, break_report, tmp_path):
+    # ASSUMPTION A-233: the clean run's partials are the ablation's own; each break has its own directory
+    ablation.write_partial("c", setup, tmp_path)
+    breaks.write_break_partials(setup, tmp_path)
+    merged = breaks.run_breaks(setup, "all", breaks.merge_outcomes(tmp_path))
+    assert merged["holes"] == break_report["holes"]
+    for name in breaks.BREAKS:
+        a, b = merged["breaks"][name], break_report["breaks"][name]
+        assert (a["moved"], a["lowered"]) == (b["moved"], b["lowered"])
+        assert _values(a["metrics"]) == _values(b["metrics"])
