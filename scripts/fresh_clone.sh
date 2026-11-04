@@ -48,10 +48,11 @@ record() { # status, step, detail
   printf '%-8s %-28s %s\n' "$1" "$2" "$3"
 }
 
-# A clean environment: no LONGTAIL_* settings, no keys, data and caches inside the clone's directory.
+# A clean environment: no LONGTAIL_* settings and no keys. Data in the clone's directory (or --data-dir); the
+# cache is the clone's default ./cache, where `longtail demo --fetch-cache` unpacks it.
 clean() {
   env -i HOME="$HOME" PATH="$PATH" TMPDIR="${TMPDIR:-/tmp}" LANG="${LANG:-C.UTF-8}" \
-    LONGTAIL_DATA_DIR="${DATA_DIR:-$DIR/data}" LONGTAIL_CACHE_DIR="$DIR/cache" "$@"
+    LONGTAIL_DATA_DIR="${DATA_DIR:-$DIR/data}" "$@"
 }
 
 # step name, log file, command...: PASS on exit 0, FAIL otherwise (last log lines shown)
@@ -65,9 +66,8 @@ run() {
   fi
 }
 
-with_timeout() { # seconds, command...  (macOS has no timeout(1))
-  perl -e 'alarm shift; exec @ARGV or die "exec: $!"' "$@"
-}
+# seconds, command...: an external command (macOS has no timeout(1)), so it also works under env -i in clean()
+TIMEOUT=(perl -e 'alarm shift; exec @ARGV or die "exec: $!"')
 
 echo "fresh clone of $REPO ($REF) in $DIR"
 
@@ -99,13 +99,20 @@ else
   record SKIP "download scene $SCENE" "--no-download"
 fi
 
-# 4. The replay demo (plan C10: longtail demo --replay): no key, every model call from the cache
+# 4. The replay demo (plan C10: longtail demo --replay; A-243): fetch the replay cache from the GitHub release,
+#    then the hero search headless. No key, every model call from the cache; a miss is an error, never a charge.
+#    The search covers the index scenes, so it needs their camera images; how many are on disk is recorded.
 if (cd "$DIR/repo" && clean uv run --no-sync longtail demo --help) >"$LOG/demo_help.log" 2>&1; then
-  if (cd "$DIR/repo" && clean with_timeout "$DEMO_TIMEOUT_S" uv run --no-sync longtail demo --replay) \
-    >"$LOG/demo.log" 2>&1; then
-    record PASS "longtail demo --replay" "$(tail -n 1 "$LOG/demo.log" | cut -c1-90)"
+  on_disk=$(cd "$DIR/repo" && clean uv run --no-sync python -c \
+    "from longtail.data.index import load_index, pandaset_root as r; s = load_index()['scenes']; \
+print(sum((r() / x['scene_id'] / 'camera').is_dir() for x in s), 'of', len(s))" 2>/dev/null)
+  record INFO "index scenes on disk" "${on_disk:-unknown} (the demo search needs all of them)"
+  run "demo --fetch-cache" demo_fetch.log "${TIMEOUT[@]}" "$DEMO_TIMEOUT_S" uv run --no-sync longtail demo --fetch-cache
+  run "demo --replay --query" demo.log "${TIMEOUT[@]}" "$DEMO_TIMEOUT_S" uv run --no-sync longtail demo --replay --query
+  if [ -d "$DIR/repo/web/dist" ]; then
+    record INFO "demo web view" "web/dist present: start it with longtail demo --replay"
   else
-    record FAIL "longtail demo --replay" "see $LOG/demo.log"
+    record SKIP "demo web view" "needs web/dist (cd web && npm install && npm run build)"
   fi
 else
   record MISSING "longtail demo --replay" "no 'demo' subcommand in this commit"
@@ -118,7 +125,7 @@ tracked_secrets=$(git ls-files | grep -E '(^|/)\.env($|\.)' | grep -v '\.env\.ex
 [ -z "$tracked_secrets" ] && record PASS "no .env tracked" "" || record FAIL "no .env tracked" "$tracked_secrets"
 
 if command -v gitleaks >/dev/null 2>&1; then
-  if gitleaks detect --source . --no-banner --redact >"$LOG/gitleaks.log" 2>&1; then
+  if gitleaks detect --source . --log-opts="--all" --no-banner --redact >"$LOG/gitleaks.log" 2>&1; then
     record PASS "gitleaks (all history)" ""
   else
     record FAIL "gitleaks (all history)" "see $LOG/gitleaks.log"
