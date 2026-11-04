@@ -202,3 +202,22 @@ CAPPED = [("v1", 16, False), ("v2", 15, False), ("v2", 16, True)]
 def test_a_response_with_16_objects_is_truncated_in_v2(monkeypatch, version, n, truncated):
     monkeypatch.setenv("LONGTAIL_VERIFIER", version)
     assert {t.truncated for t in track_source._capped(_tracks(n))} == {truncated}
+
+
+def test_a_v2_search_writes_to_its_own_run_directory(monkeypatch, tmp_path):
+    from longtail.contracts import ScenarioSpec
+    from longtail.pipeline import scene_run_dir, spec_run_id
+
+    spec = ScenarioSpec.model_validate(
+        {
+            "query": "q",
+            "assumptions": [],
+            "clarification": None,
+            "actors": [{"id": "a1", "cls": "pedestrian", "sam_prompt": "person"}],
+            "predicates": [{"name": "exists", "actors": ["a1"], "args": {}}],
+        }
+    )
+    monkeypatch.delenv("LONGTAIL_VERIFIER", raising=False)
+    assert scene_run_dir(spec, "001", tmp_path).name == f"{spec_run_id(spec)}-001"
+    monkeypatch.setenv("LONGTAIL_VERIFIER", "v2")
+    assert scene_run_dir(spec, "001", tmp_path).name == f"{spec_run_id(spec)}-001-v2"
