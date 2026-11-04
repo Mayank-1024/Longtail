@@ -251,7 +251,19 @@ class SearchAgent:
             asked = [s for s in args.get("scene_ids", []) if isinstance(s, str)]
             unknown = [s for s in asked if s not in self.scene_ids]
             todo = [s for s in asked if s in self.scene_ids and s not in searched]
-            result: PipelineResult = run(spec, todo, self.open_scene, self.track_source, self.run_root)
+            # a progress event (the scenes about to be verified) for the web view's wait estimate
+            self._log(trace, TraceEvent(step, "tool", "searching", {"scene_ids": todo}))
+
+            def progress(stage: str, scene: SceneResult | None) -> None:
+                # the web view's loader: tracks fetched, then each scene as it finishes
+                if stage == "tracked":
+                    self._log(trace, TraceEvent(step, "tool", "tracked", {"scene_ids": todo}))
+                elif scene is not None:
+                    self._log(trace, TraceEvent(step, "tool", "scene_done", _scene_summary(scene)))
+
+            result: PipelineResult = run(
+                spec, todo, self.open_scene, self.track_source, self.run_root, progress=progress
+            )
             searched += todo
             for f in result.findings():
                 found[f.finding_id] = f

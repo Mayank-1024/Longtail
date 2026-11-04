@@ -7,7 +7,7 @@ this module does the searching, so a run is the same whether a model or a script
 import hashlib
 import os
 from collections.abc import Callable
-from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -155,8 +155,13 @@ def run(
     track_source: TrackSource,
     run_root: Path,
     workers: int = WORKERS,
+    progress: Callable[[str, "SceneResult | None"], None] | None = None,
 ) -> PipelineResult:
-    """Search the scenes. A scene that fails is reported with its error; it never stops the others."""
+    """Search the scenes. A scene that fails is reported with its error; it never stops the others.
+
+    progress, if given, is called on the calling thread with ("tracked", None) once the SAM tracks are
+    fetched, then ("scene", result) as each scene finishes, in finishing order (the web view's loader).
+    """
     if spec.clarification is not None:
         raise ValueError("the spec asks a clarifying question; answer it before searching")
 
@@ -170,6 +175,13 @@ def run(
         prefetch(spec, scene_ids, open_scene, track_source, SAM_WORKERS)
     except Exception:  # prefetch only saves time; verify() makes the same calls if it could not
         pass
+    if progress is not None:
+        progress("tracked", None)
     with ThreadPoolExecutor(max_workers=max(1, workers)) as pool:
-        scenes = list(pool.map(one, scene_ids))
-    return PipelineResult(spec, scenes)
+        futures = {pool.submit(one, s): i for i, s in enumerate(scene_ids)}
+        done: dict[int, SceneResult] = {}
+        for fut in as_completed(futures):
+            done[futures[fut]] = fut.result()
+            if progress is not None:
+                progress("scene", done[futures[fut]])
+    return PipelineResult(spec, [done[i] for i in range(len(scene_ids))])

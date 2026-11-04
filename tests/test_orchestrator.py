@@ -112,6 +112,7 @@ def test_linear_pipeline_verifies_the_crosser_and_isolates_a_bad_scene(tmp_path,
         tmp_path,
     )
     by_scene = {s.scene_id: s for s in result.scenes}
+    assert [s.scene_id for s in result.scenes] == ["crossing", "broken", "empty"]  # input order kept
     assert by_scene["broken"].error.startswith("FileNotFoundError")
     assert any(f.verified for f in by_scene["crossing"].findings)
     assert not any(f.verified for f in by_scene["empty"].findings)
@@ -143,6 +144,14 @@ def test_agent_plans_searches_and_finishes_with_verified_findings_only(tmp_path,
     assert ("stop", "finish_dropped") in kinds  # the unverified ids it named were dropped
     search_out = next(e for e in result.trace if e.name == "search_scenes").detail["result"]
     assert search_out["unknown_scene_ids"] == ["nope"]
+    # the loader's progress: the scenes about to be verified, tracks fetched, then one event per scene
+    names = [e.name for e in result.trace]
+    order = [names.index(n) for n in ("searching", "tracked", "scene_done", "search_scenes")]
+    assert order == sorted(order)
+    assert next(e for e in result.trace if e.name == "searching").detail["scene_ids"] == ["crossing", "empty"]
+    done = {e.detail["scene_id"]: e.detail for e in result.trace if e.name == "scene_done"}
+    assert set(done) == {"crossing", "empty"}
+    assert done["crossing"]["verified"] >= 1 and done["empty"]["verified"] == 0
     saved = list((tmp_path / "runs").glob("search-*/search.json"))
     assert saved and json.loads(saved[0].read_text())["stop_reason"] == "finish"
     assert result.usd == pytest.approx(sum(e["usd"] for e in json.loads(saved[0].read_text())["trace"]))
