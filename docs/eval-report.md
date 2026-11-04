@@ -222,3 +222,34 @@ The bird's-eye file stays under its 5 MB budget (A-99) by thinning to about 2,70
 - **Recall is a lower bound.** The ground truth counts a labelled object wherever its cuboid projects into a synced camera image within 60 m, with no occlusion test (A-122), so it includes objects that are hidden behind others or too dark to see. The system cannot find those, so measured recall understates recall on visible objects. Checked by eye on 5 random positives: in a night scene (058) most of the labelled pedestrians are hard to see or behind parked cars.
 - **Pickups count as trucks** (A-123), as documented. A query for a truck can be satisfied by a parked pickup; one of the 5 positives checked by eye was exactly that (scene 058).
 - **One dataset,** and the ground truth inherits the labels' errors (plan section 10).
+
+<!-- results:start (scripts/report_results.py writes this section) -->
+
+## Results
+
+Split: **heldout**, 15 queries, 102 scenes. Each number has its 95% bootstrap interval in brackets (1000 resamples over queries, A-133). P@10 divides by 10 and shows how many findings came back per query (A-134). Configuration (d) is not run (A-213).
+
+From `longtail/eval/runs/all-heldout/results`, commit `65d94579418143235d4d07ba5f02d3678dcce367`, `65d94579418143235d4d07ba5f02d3678dcce367-dirty`, thresholds `aedd697d2cbb2e1d`.
+
+### Ablation
+
+| Configuration | Precision | Recall | P@10 | Catch rate | False rejection | Cost per query | Seconds per query |
+|---|---|---|---|---|---|---|---|
+| (a) Spark Open alone | 0.00 [0.00, 0.00] | 0.00 [0.00, 0.00] | 0.00 [0.00, 0.00]; returned 8.3 [6.6, 9.7] of 10 | 0.89 [0.82, 0.97] | 0.81 [0.67, 1.00] | $0.542 [$0.538, $0.545] | 4.3 [0.5, 9.6] |
+| (b) + SAM 3.1 tracks | 0.088 [0.044, 0.134] | 0.28 [0.19, 0.35] | 0.080 [0.033, 0.133]; returned 10.0 [10.0, 10.0] of 10 | n/a | n/a | $11.168 [$9.792, $12.928] | 92.5 [81.0, 107.2] |
+| (c) + LiDAR verification | 0.20 [0.13, 0.29] | 0.20 [0.11, 0.32] | 0.19 [0.07, 0.34]; returned 8.3 [6.7, 9.7] of 10 | 0.59 [0.57, 0.60] | 0.46 [0.44, 0.48] | $12.499 [$10.445, $14.483] | 493.1 [162.0, 1031.2] |
+
+### Deliberate breaks
+
+A break passes when it lowers precision, the catch rate or recall of (c); one that lowers none is a hole in the evaluation (A-141).
+
+| Break on (c) | Precision | Recall | Catch rate | P@10 | False rejection | Moved | Result |
+|---|---|---|---|---|---|---|---|
+| None (clean (c)) | 0.20 [0.13, 0.29] | 0.20 [0.11, 0.32] | 0.59 [0.57, 0.60] | 0.19 [0.07, 0.34] | 0.46 [0.44, 0.48] | | |
+| Verifier off | 0.064 [0.027, 0.106] | 0.37 [0.26, 0.43] | 0.00 [0.00, 0.00] | 0.17 [0.07, 0.31] | 0.00 [0.00, 0.00] | precision, catch rate | passes |
+| Calibration 2° and 0.3 m | 0.14 [0.03, 0.25] | 0.085 [0.014, 0.199] | 0.68 [0.64, 0.72] | 0.073 [0.020, 0.147] | 0.59 [0.56, 0.64] | precision, recall | passes |
+| LiDAR offset 200 ms | 0.18 [0.11, 0.27] | 0.16 [0.07, 0.26] | 0.62 [0.60, 0.65] | 0.18 [0.07, 0.32] | 0.50 [0.49, 0.51] | precision, recall | passes |
+
+<!-- results:end -->
+
+Provenance: the per-scene runs were made at `65d9457` on Explorer; they were scored at `65d9457-dirty`, whose only changes are commit `c446597` (scoring reads the clean partials from the breaks entry point and memoises the label projections per frame; no metric changes, tests show the same outcomes). Secondary results over the 29 index scenes and the dev split are in `longtail/eval/runs/{index-heldout,index-dev,all-dev}/results/`; no break is a hole in any of them.

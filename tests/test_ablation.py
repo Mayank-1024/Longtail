@@ -374,3 +374,39 @@ def test_break_partials_merge_to_the_same_report(setup, break_report, tmp_path):
         a, b = merged["breaks"][name], break_report["breaks"][name]
         assert (a["moved"], a["lowered"]) == (b["moved"], b["lowered"])
         assert _values(a["metrics"]) == _values(b["metrics"])
+
+
+def test_partials_written_by_the_ablation_entry_point_load_from_another(tmp_path, monkeypatch):
+    # `python -m longtail.eval.ablation` pickles its classes as `__main__.Output`; the breaks entry point,
+    # whose __main__ has no Output, must still read the clean run's partials
+    import pickle
+    import sys
+    import types
+
+    out = ablation.Output([], [], 0.25, 1.0, {})
+    writer_main = types.ModuleType("__main__")
+    writer_main.Output = ablation.Output
+    monkeypatch.setattr(ablation.Output, "__module__", "__main__")
+    monkeypatch.setitem(sys.modules, "__main__", writer_main)
+    doc = {"format": ablation.PARTIAL_FORMAT, "scene_id": "s1", "outputs": {"q1": out}}
+    path = ablation.partial_path(tmp_path, "c", "s1")
+    path.parent.mkdir(parents=True)
+    path.write_bytes(pickle.dumps(doc))
+    assert b"__main__" in path.read_bytes()
+    monkeypatch.setitem(sys.modules, "__main__", types.ModuleType("__main__"))  # the reader's __main__
+    monkeypatch.undo()
+    merged = ablation.read_partials(tmp_path, "c", ["s1"])
+    assert merged["q1"].cost_usd == 0.25
+
+
+def test_boxes_at_is_memoised_and_unchanged(setup):
+    scene = setup.truth_scenes[0]
+    with eval_ground_truth():
+        labels = gt.LabelScene(scene)
+        cam = scene.cameras[0]
+        first = labels.boxes_at(cam, 0)
+        assert labels.boxes_at(cam, 0) is first
+        labels._boxes_at.clear()
+        again = labels.boxes_at(cam, 0)
+    assert [c.uuid for c, _ in again] == [c.uuid for c, _ in first]
+    assert all(np.array_equal(a, b) for (_, a), (_, b) in zip(again, first, strict=True))

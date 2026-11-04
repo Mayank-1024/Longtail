@@ -4,7 +4,7 @@
 
 An engineer types a rare scenario in plain English ("a pedestrian crossing in front of us while we move") and gets back the moments in multi-camera driving logs that contain it. Every claim a model makes about those moments is checked against a second sensor, LiDAR, before it counts. The model proposes; geometry decides.
 
-> **Status (Nov 3, 2026): running on real data.** Every part below is built and tested (305 tests on synthetic scenes, plus real-data tests on PandaSet scene 001), and each Meta model has run live. The full evaluation on all 103 PandaSet scenes is in progress. Numbers appear in this README only after they are measured; until then each says *not measured yet*.
+> **Status (Nov 3, 2026): evaluated.** The full evaluation ran on 102 PandaSet scenes (all 103 but 054, whose camera timestamps are broken; A-240, A-142), with 15 held-out queries run once. Numbers below are measured, each with a 95% bootstrap interval over queries; the full tables are in [docs/eval-report.md](docs/eval-report.md).
 
 ## How it works
 
@@ -57,13 +57,17 @@ The first real data also caught two bugs that synthetic tests could not: the ego
 
 | Metric | Value |
 |---|---|
-| Precision@10, held-out | *not measured yet* |
-| Recall over ground-truth events, held-out | *not measured yet* |
-| Hallucination-catch rate (model claims the labels show are false, caught by the verifier) | *not measured yet* |
-| False-rejection rate (true claims the verifier rejected) | *not measured yet* |
-| Cost and seconds per query | *not measured yet* |
+| Precision@10, held-out | 0.19 [0.07, 0.34] with LiDAR verification, against 0.080 with SAM tracks alone and 0.00 for Spark Open alone |
+| Recall over ground-truth events, held-out | 0.20 [0.11, 0.32]; 0.28 [0.19, 0.35] without the verifier, which trades recall for precision (0.20 against 0.088) |
+| Hallucination-catch rate (model claims the labels show are false, caught by the verifier) | 0.59 [0.57, 0.60] (64,949 of 110,269 false claims) |
+| False-rejection rate (true claims the verifier rejected) | 0.46 [0.44, 0.48]: the verifier is strict |
+| Cost and seconds per query | $12.50 and 493 s at list price over all 102 scenes, with no caching; our whole spend, evaluation included, was $67.67 |
 
 Ablation: (a) Spark Open alone, (b) plus SAM 3.1 tracks, (c) plus LiDAR verification. Deliberate breaks (verifier off, calibration shifted 2° and 0.3 m, LiDAR offset 200 ms) must lower precision or the catch rate; a break that does not is reported as a hole in the evaluation. Each number gets a 95% bootstrap interval over queries.
+
+All three breaks lowered precision or recall on every split and scene set; none is a hole. Values in brackets are 95% intervals; held-out, 102 scenes. Per-query cost is the list price of every call a query would make over all 102 scenes with nothing cached; the actual spend was far lower because calls are cached and shared across queries.
+
+![Ablation on the held-out queries: precision, recall, P@10 and catch rate for (a), (b) and (c)](docs/ablation-heldout.png)
 
 ## Run it
 
@@ -96,6 +100,8 @@ LONGTAIL_MODE=replay uv run uvicorn api.server:create_app_from_env --factory --p
 - Past tense only for what ran; this README is updated as results land.
 
 ## Dataset and credit
+
+SAM 3.1 by Meta is used under the [SAM License](https://github.com/facebookresearch/sam3/blob/main/LICENSE) (last updated November 19, 2025). LongTail calls SAM 3.1 through Meta's hosted API and does not include or redistribute its weights or code; the replay cache published with the demo holds only SAM's outputs (masks and tracks) for PandaSet clips.
 
 PandaSet by Hesai and Scale AI, licensed under CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/). Frames are shown with LiDAR, mask and box overlays added by LongTail. Dataset files are never committed.
 

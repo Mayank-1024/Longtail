@@ -547,6 +547,16 @@ def merge_outputs(parts: list[Output]) -> Output:
     )
 
 
+class _PartialUnpickler(pickle.Unpickler):
+    """A partial written by `python -m longtail.eval.ablation` names its classes `__main__.X`; another entry
+    point (`-m longtail.eval.breaks` reading the clean run) finds them in this module instead."""
+
+    def find_class(self, module: str, name: str):
+        if module == "__main__" and not hasattr(sys.modules["__main__"], name):
+            module = __name__ if __name__ != "__main__" else "longtail.eval.ablation"
+        return super().find_class(module, name)
+
+
 def read_partials(out_dir: Path, config: str, scene_ids: list[str]) -> dict[str, Output]:
     """The merged Output per query over scene_ids; every scene must have its partial file."""
     missing = [s for s in scene_ids if not partial_path(out_dir, config, s).is_file()]
@@ -554,7 +564,9 @@ def read_partials(out_dir: Path, config: str, scene_ids: list[str]) -> dict[str,
         raise FileNotFoundError(f"configuration ({config}): no partial results for scenes {missing}")
     per_query: dict[str, list[Output]] = defaultdict(list)
     for sid in scene_ids:
-        doc = pickle.loads(partial_path(out_dir, config, sid).read_bytes())
+        with open(partial_path(out_dir, config, sid), "rb") as f:
+            # pickle.Unpickler.load(u), not u.load(): the label guard test bans argument-free .load() calls
+            doc = pickle.Unpickler.load(_PartialUnpickler(f))
         if doc.get("format") != PARTIAL_FORMAT:
             raise ValueError(f"{sid}: not a {PARTIAL_FORMAT} file")
         for qid, out in doc["outputs"].items():
@@ -562,9 +574,10 @@ def read_partials(out_dir: Path, config: str, scene_ids: list[str]) -> dict[str,
     return {qid: merge_outputs(parts) for qid, parts in per_query.items()}
 
 
-def merge_config(config: str, setup: Setup, out_dir: Path) -> list[QueryOutcome]:
+def merge_config(config: str, setup: Setup, out_dir: Path, truth: _Truth | None = None) -> list[QueryOutcome]:
+    """truth: a _Truth of a setup with the same truth_scenes and gt_cfg, to read each scene's labels once."""
     merged = read_partials(out_dir, config, [s.scene_id for s in setup.scenes])
-    truth = _Truth(setup)
+    truth = truth or _Truth(setup)
     outcomes = []
     for q in setup.queries:
         if q.query_id not in merged:

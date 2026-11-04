@@ -5,6 +5,7 @@
 import argparse
 import sys
 
+from longtail import demo as demo_cli
 from longtail.agent import cli as agent_cli
 from longtail.data import cli as data_cli
 from longtail.env import load_dotenv
@@ -27,6 +28,8 @@ def main(argv: list[str] | None = None) -> int:
     sam_cli.register(sub)
     # ASSUMPTION A-131: `longtail gt` is registered here too (A-34)
     gt_cli.register(sub)
+    # ASSUMPTION A-243: `longtail demo` replays the recorded demo from the cache (A-34)
+    demo_cli.register(sub)
     args = parser.parse_args(argv)
     return args.func(args)
 
