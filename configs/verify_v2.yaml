@@ -1,0 +1,139 @@
+# Verification thresholds, post-freeze v2 (LONGTAIL_VERIFIER=v2, A-244): verify.yaml plus the four fixes of
+# docs/eval-report.md ("v2 (post-freeze, pre-registered)"). Everything else is identical to verify.yaml, and
+# tests/test_verifier_v2.py checks that. Pre-registered at tag v2-prereg; not tuned on any evaluation result.
+# see A-58 (verify.yaml): every threshold lives here; the loader has no defaults in code
+
+association:
+  # Plan C4 step 1: erode each mask so edge pixels do not pick up background points.
+  # see A-50 (verify.yaml): erosion uses a disk of this radius; boxes are inset by the same number of pixels
+  erode_px: 3
+  # v2, A-245: an eroded mask under this many pixels falls back to the uneroded mask
+  min_eroded_px: 50
+  # v2, A-246: no points / no cluster in a mask expected to hold fewer than dbscan_min_points points
+  # (in-box coverage times the selected share of the box) is UNVERIFIABLE (thin_mask), not FAIL
+  thin_mask_unverifiable: true
+  # v2, A-248: SAM's cap is 16 objects per response, so a response with 16 distinct objects is truncated
+  truncated_min_objects: 16
+  # Plan C4 step 2: points inside the mask's box at any depth; below this the frame is UNVERIFIABLE.
+  min_coverage: 5
+  # Plan C4 step 3: drop points less than this far above the ground.
+  ground_height_m: 0.2
+  # Not in the plan: the LiDAR sits above the cameras and sees past an object onto what is behind it, and
+  # those points land inside the object's mask. Per image cell, drop points this far behind the nearest one.
+  # see A-63 (verify.yaml): depth-buffer visibility filter after ground removal; 0 disables it
+  visibility_cell_px: 8
+  visibility_margin_m: 1.0
+  # Plan C4 step 4: split depths at gaps over this, keep the nearest part holding this share of points.
+  # see A-51 (verify.yaml): camera z depth; if no part holds the share, the largest part is used
+  depth_gap_m: 0.8
+  nearest_cluster_min_frac: 0.3
+  # Plan C4 step 4: DBSCAN in 3D, keep the largest component.
+  dbscan_eps_m: 0.5
+  dbscan_min_points: 5
+  # Plan C4 step 7: "mask" uses the eroded mask; "frustum" uses the box even when a mask exists.
+  selection: mask
+
+  ground:
+    # see A-49 (verify.yaml): local plane around the object, falling back to one plane per sweep
+    mode: local  # local | global
+    local_radius_m: 3.0
+    min_local_inliers: 30
+    ransac_iterations: 200
+    # RANSAC draws its three seed points from this lowest share of points by height (ground is lowest).
+    ransac_seed_lowest_frac: 0.3
+    ransac_inlier_m: 0.1
+    max_tilt_deg: 15.0
+    # A plane with more than this share of points further than below_margin_m under it is a roof, not ground.
+    max_below_frac: 0.05
+    below_margin_m: 0.3
+    global_sample_points: 5000
+    seed: 0
+
+  merge:
+    # Plan C4 step 6: same class, adjacent cameras, within this distance over this share of shared timestamps.
+    max_centroid_dist_m: 1.0
+    min_shared_frac: 0.5
+    # see A-74 (verify.yaml): or when their clusters share at least this many LiDAR points at that timestamp, making
+    # up at least this share of the smaller cluster (a mask spilling onto a neighbour shares only a few)
+    min_shared_points: 5
+    min_shared_points_frac: 0.15
+    # see A-56 (verify.yaml): same-camera fragments: extrapolate over gaps up to this long, velocity from this window
+    fragment_max_gap_s: 1.0
+    fragment_velocity_window_s: 1.0
+
+tracks:
+  # Plan C5: Savitzky-Golay smoothing of world centroids, window 5 samples.
+  savgol_window: 11  # v2, A-247 (v1: 5, the plan's)
+  # v2, A-247: a sample further than outlier_m (horizontal) from every prediction of it, interpolated between its
+  # k-th neighbours either side (k = 1 .. outlier_window // 2), is dropped; runs of up to 2 bad samples go
+  outlier_window: 7
+  outlier_m: 1.0
+  # see A-66 (verify.yaml): quadratic Savitzky-Golay fit; speed is horizontal (world x, y)
+  savgol_polyorder: 2
+  # see A-67 (verify.yaml): gaps up to this are interpolated, longer ones split the speed series, C4 skips included
+  max_interp_gap_s: 0.3
+  # see A-68 (verify.yaml): the position used for speed: "median" (C4's sample) or "box_centre" (L-shape fit)
+  position: box_centre
+  lshape_angle_step_deg: 1.0
+  lshape_min_distance_m: 0.01
+  # see A-73 (verify.yaml): an end of the box is truncated when its points touch the image border or sit next to nearer
+  # points; the distances grow with the cluster's point spacing in pixels
+  edge_band_m: 0.15
+  truncation_border_px: 4
+  occluder_radius_px: 4
+  occluder_margin_m: 0.5
+  # The border and occluder distances grow to this many times the cluster's median point spacing in pixels.
+  spacing_factor: 1.5
+
+ego_path:
+  # Plan C5: the ego's actual path over the next 3 s, as a corridor of half-width 1.5 m.
+  horizon_s: 3.0
+  half_width_m: 1.5
+  # see A-69 (verify.yaml): the corridor reaches at least this far, extended straight ahead when the ego is slow
+  min_length_m: 10.0
+
+predicates:
+  exists:
+    # Plan C6: a foreground cluster of at least 15 points (5 beyond 40 m) fitting the class size prior;
+    # UNVERIFIABLE beyond 60 m.
+    min_points: 15
+    min_points_far: 5
+    far_m: 40.0
+    max_range_m: 60.0
+    # see A-76 (verify.yaml): size priors; the plan gives only the pedestrian's. Footprint bounds the longest horizontal
+    # side and caps the shorter one; lower bounds are loose because clusters are visible surfaces only
+    size_priors:
+      pedestrian: {height_m: [1.0, 2.1], footprint_m: [0.3, 1.2], typical_height_m: 1.7}
+      cyclist: {height_m: [1.0, 2.2], footprint_m: [0.3, 2.2], typical_height_m: 1.7}
+      car: {height_m: [1.1, 2.3], footprint_m: [0.8, 5.8], typical_height_m: 1.5}
+      truck: {height_m: [1.6, 4.5], footprint_m: [1.0, 13.0], typical_height_m: 3.0}
+      bus: {height_m: [2.4, 4.5], footprint_m: [1.0, 18.5], typical_height_m: 3.2}
+  within_distance:
+    # Plan C6: median range from the ego at most m, with this tolerance.
+    tolerance_m: 0.5
+  motion:
+    # Plan C6: above 0.5 m/s (or below 0.3 m/s) for at least 1 s, with hysteresis between the two.
+    moving_mps: 0.5
+    stopped_mps: 0.3
+    window_s: 1.0
+    # see A-77 (verify.yaml): a step whose implied acceleration exceeds this is a jump in the position, not motion
+    max_accel_mps2: 10.0
+    # v2, A-247: windows with a jump are judged; the outlying samples were dropped instead
+    drop_jump_windows: false
+  crossing:
+    # Plan C6: enters the ego corridor 0 to 30 m ahead within 3 s (the corridor's horizon_s), with lateral speed
+    # toward it above this.
+    max_ahead_m: 30.0
+    min_lateral_mps: 0.3
+  relative_position:
+    # Plan C6: on the stated side for at least half of the window.
+    # see A-78 (verify.yaml): "the window" is a 1 s window centred on each frame
+    window_s: 1.0
+    min_frac: 0.5
+  occluded_by:
+    # Plan C6: a nearer cluster of class cls covers at least 20% of the target's projected box.
+    min_cover_frac: 0.2
+
+engine:
+  # Plan C6: every combination of candidate tracks is tried, up to this many.
+  max_bindings: 200

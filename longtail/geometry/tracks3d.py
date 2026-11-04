@@ -227,9 +227,33 @@ def track_motion(scene: Scene, assoc: Association, cfg: TracksConfig | None = No
     if not known.any():
         known[:] = True
         obs_pos = np.array([s.xyz_world for s in samples])
-    motion = motion_from_positions(scene, obs_ts[known], obs_pos[known], cfg)
+    keep = known & _inliers(obs_ts, obs_pos, known, cfg)
+    motion = motion_from_positions(scene, obs_ts[keep], obs_pos[keep], cfg)
     speeds = [float(motion.speed_mps[motion.index(s.ts)]) if _has(motion, s.ts) else 0.0 for s in samples]
     return TrackedObject(assoc, assoc.track.model_copy(update={"speed_mps": speeds}), motion, fit)
+
+
+def _inliers(ts: np.ndarray, pos: np.ndarray, known: np.ndarray, cfg: TracksConfig) -> np.ndarray:
+    """False for a known sample further than outlier_m (horizontal) from every prediction of it made by
+    interpolating between its k-th known neighbours either side, k = 1 .. outlier_window // 2; samples
+    without neighbours that far either side are kept (v2 only, A-247)."""
+    keep = np.ones(len(pos), bool)
+    if cfg.outlier_window is None or cfg.outlier_m is None:
+        return keep
+    # ASSUMPTION A-247: (v2) for steady motion every prediction is the sample itself, so speed never makes an
+    # outlier, and one bad neighbour spoils only the predictions that use it
+    idx = np.flatnonzero(known)
+    h = cfg.outlier_window // 2
+    for j in range(h, len(idx) - h):
+        i = idx[j]
+        dist = []
+        for k in range(1, h + 1):
+            a, b = idx[j - k], idx[j + k]
+            pred = pos[a, :2] + (pos[b, :2] - pos[a, :2]) * (ts[i] - ts[a]) / (ts[b] - ts[a])
+            dist.append(np.linalg.norm(pos[i, :2] - pred))
+        if min(dist) > cfg.outlier_m:
+            keep[i] = False
+    return keep
 
 
 def motion_from_positions(scene: Scene, obs_ts: np.ndarray, obs_pos: np.ndarray, cfg: TracksConfig) -> Motion:

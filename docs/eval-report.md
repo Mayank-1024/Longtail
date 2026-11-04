@@ -281,6 +281,29 @@ The thresholds and rules are frozen for the evaluation, so these are listed rath
 - **A-77: jump rejection drops most steps on real tracks** (1,050 of 1,350 on the parked cars). Fix: reject the single outlying sample (for example by a median test) instead of every 1 s window that contains a jump.
 - **The smoothing window (plan: 5 samples; quadratic fit, A-66) is too short for real jitter.** Fix: a longer window (11 trimmed the synthetic spikes, C5 above) or a robust fit, tuned on development queries.
 
+## v2 (post-freeze, pre-registered)
+
+The fixes listed above, made after the freeze and evaluated once. **v1, the frozen evaluation, stays the result of record**: the README, the Devpost entry and the video report v1. v2 is reported beside it whatever it shows, including if it is worse.
+
+The changes come from the real-data checks of Nov 3 (C4 real masks, C5 parked cars, SAM's object cap), not from the evaluation results; but the people who wrote them had seen v1's held-out aggregate numbers, so v2 is not a blind result. Its parameters were fixed at tag `v2-prereg`, before any v2 run, and are not changed after it. A bug fix that leaves the parameters alone is allowed and is listed here if made. The parameters were checked only on synthetic unit tests (`tests/test_verifier_v2.py`).
+
+v2 is `configs/verify_v2.yaml`, chosen by `LONGTAIL_VERIFIER=v2` (A-244). It is `verify.yaml` plus exactly these fields (a test checks nothing else differs); with the switch off, v1 reproduces exactly, thresholds hash `aedd697d2cbb2e1d` included.
+
+| Fix | Limitation | v2 rule | Parameters |
+|---|---|---|---|
+| A-245 | A-50: erosion empties thin masks | An eroded mask under `min_eroded_px` pixels falls back to the uneroded mask | `min_eroded_px: 50` |
+| A-246 | A-46: a thin mask with no points reads as FAIL | No points or no cluster is FAIL only when the selection should hold points: in-box coverage times the selected share of the box at least `dbscan_min_points`; otherwise UNVERIFIABLE (`thin_mask`) | `thin_mask_unverifiable: true` (threshold: the existing `dbscan_min_points: 5`) |
+| A-247 | A-77 and the smoothing window: jitter drops most motion windows | Drop single outlying samples: further than `outlier_m` from every interpolation of the sample between its k-th neighbours either side (k = 1 to 3); judge windows that contain a jump; smooth over 11 samples | `outlier_window: 7`, `outlier_m: 1.0`, `drop_jump_windows: false`, `savgol_window: 11` |
+| A-248 | A-110: truncation under-flagged | A SAM response with 16 distinct object ids marks all its tracks truncated (as well as A-110's per-frame rule) | `truncated_min_objects: 16` |
+
+Not in v2: re-sending crowded cameras as halves (A-118), which needs new SAM calls.
+
+**What is run:** configuration (c) only, on all 102 scenes, both splits, from the same replayed SAM responses as v1 (no paid calls), on Explorer with `scripts/explorer/eval_v2.sbatch` and `scripts/explorer/score_v2.sbatch`. (a) and (b) do not use the verifier and are unchanged. The breaks are not rerun for v2. Results go to `longtail/eval/runs/all-{heldout,dev}/results_v2/`.
+
+<!-- v2-results:start -->
+Not run yet.
+<!-- v2-results:end -->
+
 ## Limits of the evaluation
 
 - **Scenes:** all 103 PandaSet scenes except 054, whose camera timestamps are broken (A-240): 102 scenes (A-142), not the plan's 30. Results over the index scenes alone (29 once 054 is dropped), where reported, are secondary.
