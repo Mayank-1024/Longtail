@@ -129,19 +129,23 @@ uv run python -m longtail.eval.breaks --queries <file> --split heldout --replay
    ```python
    import importlib.util, json, tarfile
    from pathlib import Path
+
    spec = importlib.util.spec_from_file_location("cov", "scripts/sam_coverage.py")
-   cov = importlib.util.module_from_spec(spec); spec.loader.exec_module(cov)
+   cov = importlib.util.module_from_spec(spec)
+   spec.loader.exec_module(cov)
    cache, scenes, concepts = Path("cache"), {"001", "005", "018", "058"}, cov.gold_concepts()
    n = 0
    with tarfile.open("sam-cache-4-scenes.tgz", "w:gz") as tar:
        for f in sorted((cache / "clips").glob("*.clip_index.json")):
            ix = json.loads(f.read_text())
            if ix["scene_id"] in scenes and ix["crop"]["name"] == "full":
-               tar.add(f); n += 1
+               tar.add(f)
+               n += 1
                for c in concepts:
                    r = cache / "sam" / "responses" / f"{cov.response_key(ix['clip_id'], c)}.txt"
                    if r.is_file():
-                       tar.add(r); n += 1
+                       tar.add(r)
+                       n += 1
    print(n, "files in sam-cache-4-scenes.tgz")
    ```
 
