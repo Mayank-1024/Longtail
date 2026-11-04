@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <title>LongTail</title>
+  <rect x="1" y="1" width="62" height="62" rx="14" fill="#0f1115" stroke="#2a2f3a" stroke-width="2"/>
+  <path d="M14 12 C 16 35, 25 45.5, 49 49" fill="none" stroke="#38bdf8" stroke-width="6.5" stroke-linecap="round"/>
+  <circle cx="49.5" cy="49" r="7.5" fill="#22c55e" stroke="#0f1115" stroke-width="3"/>
+</svg>
