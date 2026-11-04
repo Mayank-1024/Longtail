@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { TraceEvent } from "../types";
 
-// 5 min a scene (A-249): measured on a laptop with 4 SAM workers (about 2.5 h over the 29 index scenes)
+// 5 min a scene: measured on a laptop with 4 SAM workers (about 2.5 h over the 29 index scenes)
 const MIN_PER_SCENE = 5;
 
 function clock(s: number): string {
