@@ -7,7 +7,7 @@ import pytest
 import yaml
 from synthetic import SyntheticScene, object_mask, track2d_from_masks
 
-from longtail.contracts import Track2D
+from longtail.contracts import ScenarioSpec, Track2D
 from longtail.eval import ablation, gt
 from longtail.geometry.associate import associate
 from longtail.geometry.tracks3d import _inliers
@@ -205,7 +205,6 @@ def test_a_response_with_16_objects_is_truncated_in_v2(monkeypatch, version, n, 
 
 
 def test_a_v2_search_writes_to_its_own_run_directory(monkeypatch, tmp_path):
-    from longtail.contracts import ScenarioSpec
     from longtail.pipeline import scene_run_dir, spec_run_id
 
     spec = ScenarioSpec.model_validate(
@@ -221,3 +220,30 @@ def test_a_v2_search_writes_to_its_own_run_directory(monkeypatch, tmp_path):
     assert scene_run_dir(spec, "001", tmp_path).name == f"{spec_run_id(spec)}-001"
     monkeypatch.setenv("LONGTAIL_VERIFIER", "v2")
     assert scene_run_dir(spec, "001", tmp_path).name == f"{spec_run_id(spec)}-001-v2"
+
+
+def test_a_resumed_v2_search_never_loads_a_v1_run(monkeypatch, tmp_path):
+    from longtail import pipeline
+
+    spec = ScenarioSpec.model_validate(
+        {
+            "query": "q",
+            "assumptions": [],
+            "clarification": None,
+            "actors": [{"id": "a1", "cls": "pedestrian", "sam_prompt": "person"}],
+            "predicates": [{"name": "exists", "actors": ["a1"], "args": {}}],
+        }
+    )
+    scene = SimpleNamespace(scene_id="001")
+    saved = SimpleNamespace(spec=spec, windows=[], scene_id="001")
+    monkeypatch.setattr(pipeline, "uniform_windows", lambda s: [])
+    monkeypatch.setattr(pipeline, "load_run", lambda d: saved)
+    monkeypatch.setattr(pipeline, "verify_and_record", lambda *a: "verified again")
+    monkeypatch.setenv("LONGTAIL_RESUME", "1")
+    monkeypatch.delenv("LONGTAIL_VERIFIER", raising=False)
+    v1_dir = pipeline.scene_run_dir(spec, "001", tmp_path)
+    v1_dir.mkdir()
+    (v1_dir / pipeline.RUN_FILE).write_text("{}")
+    assert pipeline.search_scene(spec, scene, None, tmp_path) is saved  # v1 resumes its own run
+    monkeypatch.setenv("LONGTAIL_VERIFIER", "v2")
+    assert pipeline.search_scene(spec, scene, None, tmp_path) == "verified again"  # v2 ignores it
