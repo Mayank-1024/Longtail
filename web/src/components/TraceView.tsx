@@ -13,6 +13,7 @@ function summary(e: TraceEvent): string {
     if (e.name === "finish_dropped") return `dropped ${(d.finding_ids ?? []).length} unverified id(s) named in finish`;
     return d.error ? String(d.error) : e.name.replace("_", " ");
   }
+  if (e.name === "searching") return `verifying ${((d.scene_ids ?? []) as string[]).length} scene(s) on LiDAR…`;
   if (e.name === "list_scenes") return `${(d.result?.scenes ?? []).length} scenes available`;
   if (e.name === "search_scenes") {
     const scenes = d.result?.scenes ?? [];

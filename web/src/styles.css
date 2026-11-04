@@ -89,6 +89,10 @@ h2 { margin: 0 0 8px; font-size: 18px; }
 .trace-kind { color: var(--accent); }
 .trace-stop .trace-kind { color: var(--unverifiable); }
 .trace-usd { text-align: right; color: var(--muted); }
+.wait { background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 6px; padding: 10px 14px; margin: 0 0 12px; max-width: 760px; }
+.wait-head { display: flex; gap: 12px; justify-content: space-between; align-items: baseline; flex-wrap: wrap; }
+.wait-clock { color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.wait p { margin: 6px 0 0; }
 .trace-running { color: var(--muted); font-style: italic; }
 .trace-total { color: var(--muted); font-size: 12px; margin-top: 6px; }
 

@@ -251,6 +251,8 @@ class SearchAgent:
             asked = [s for s in args.get("scene_ids", []) if isinstance(s, str)]
             unknown = [s for s in asked if s not in self.scene_ids]
             todo = [s for s in asked if s in self.scene_ids and s not in searched]
+            # ASSUMPTION A-249: a progress event (the scenes about to be verified) for the web view's wait estimate
+            self._log(trace, TraceEvent(step, "tool", "searching", {"scene_ids": todo}))
             result: PipelineResult = run(spec, todo, self.open_scene, self.track_source, self.run_root)
             searched += todo
             for f in result.findings():

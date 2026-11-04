@@ -3,6 +3,7 @@ import { api } from "./api";
 import { Detail } from "./components/Detail";
 import { Results } from "./components/Results";
 import { TraceView } from "./components/TraceView";
+import { WaitNotice } from "./components/WaitNotice";
 import type { Search, SearchListItem, TraceEvent } from "./types";
 
 const EXAMPLES = [
@@ -19,6 +20,7 @@ export function App() {
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState<Search | null>(null);
   const [open, setOpen] = useState<string | null>(null);
+  const [startedAt, setStartedAt] = useState(0);
 
   const refresh = () => api.searches().then(setSaved).catch(() => undefined);
   const show = (sid: string) => api.search(sid).then((s) => { setSearch(s); setOpen(null); }).catch((e) => setError(String(e)));
@@ -34,6 +36,7 @@ export function App() {
     setSearch(null);
     setOpen(null);
     setLive([]);
+    setStartedAt(Date.now());
     try {
       const sid = await api.start(q.trim(), (e) => setLive((prev) => [...(prev ?? []), e]));
       await show(sid);
@@ -91,6 +94,7 @@ export function App() {
           {live !== null && (
             <div>
               <h2>searching…</h2>
+              <WaitNotice events={live} startedAt={startedAt} />
               <TraceView events={live} running />
             </div>
           )}
