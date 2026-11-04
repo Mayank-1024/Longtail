@@ -2,8 +2,8 @@
 
     PYTHONPATH=. uv run python scripts/report_v2.py
 
-Reads configuration (c) of v1 (results/) and of v2 (results_v2/) for each scene set
-and split under longtail/eval/runs/, and fails if a v2 result was not made with the v2 thresholds.
+Reads configuration (c) of v1 (runs/<set>-<split>/results/) and of v2 (runs/<set>-<split>-v2/results/) under
+longtail/eval/, and fails if a v2 result was not made with the v2 thresholds.
 """
 
 import json
@@ -35,7 +35,7 @@ def render() -> str:
     out = []
     for name, title in SETS:
         v1_path = RUNS / name / "results" / "ablation_c.json"
-        v2_path = RUNS / name / "results_v2" / "ablation_c.json"
+        v2_path = RUNS / f"{name}-v2" / "results" / "ablation_c.json"
         if not v2_path.is_file():
             out += [f"**{title}:** v2 not scored.", ""]
             continue

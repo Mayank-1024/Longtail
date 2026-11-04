@@ -300,10 +300,40 @@ v2 is `configs/verify_v2.yaml`, chosen by `LONGTAIL_VERIFIER=v2` (A-244). It is 
 | A-247 | A-77 and the smoothing window: jitter drops most motion windows | Drop single outlying samples: further than `outlier_m` from every interpolation of the sample between its k-th neighbours either side (k = 1 to 3); judge windows that contain a jump; smooth over 11 samples | `outlier_window: 7`, `outlier_m: 1.0`, `drop_jump_windows: false`, `savgol_window: 11` |
 | A-248 | A-110: truncation under-flagged | A SAM response with 16 distinct object ids marks all its tracks truncated (as well as A-110's per-frame rule) | `truncated_min_objects: 16` |
 
-**What is run:** configuration (c) only, on all 102 scenes, both splits, from the same replayed SAM responses as v1 (no paid calls), on Explorer with `scripts/explorer/eval_v2.sbatch` and `scripts/explorer/score_v2.sbatch`. (a) and (b) do not use the verifier and are unchanged. The breaks are not rerun for v2. Results go to `longtail/eval/runs/all-{heldout,dev}/results_v2/`.
+**What is run:** configuration (c) only, on all 102 scenes, both splits, from the same replayed SAM responses as v1 (no paid calls), on Explorer with `scripts/explorer/eval_v2.sbatch` and `scripts/explorer/score_v2.sbatch`. (a) and (b) do not use the verifier and are unchanged. The breaks are not rerun for v2. Results go to `longtail/eval/runs/<set>-<split>-v2/results/` (the first scoring submission wrote to `results_v2/`, which A-140's results-directory check refused; only the path changed).
+
+**Outcome.** On the held-out split over 102 scenes, v2 raises recall from 0.204 to 0.243 (152 of 626 events matched, against 128) and P@10 from 0.19 to 0.24, and lowers precision from 0.199 to 0.185; every change lies inside the intervals. By the rule above (raise one without lowering the other), **v1 stays the headline**. Catch rate and false rejection do not move (0.59 and 0.46): the fixes find more true events, but do not change how well the verifier separates false claims from true ones. The dev split and the 29 index scenes show the same pattern: recall up on all three, precision within 0.02 either way.
+
+Provenance: the v2 partials were made on Explorer by `scripts/explorer/eval_v2.sbatch` (job 11603273, 102 tasks, Nov 3 21:31 to 22:05 ET) with the code of `v2-prereg` (`851a833`) copied into the cluster checkout, and scored by `score_v2.sbatch` (job 11605101). The cluster checkout's git HEAD is still `65d9457`, so the results' `commit` field reads `65d9457…-dirty`; the v2 thresholds hash `61e4c64ec1dae446` (checked by `scripts/report_v2.py`) identifies the v2 configuration. The first scoring job (11604805) was cancelled after its results-directory check refused `results_v2/`; nothing else was rerun.
 
 <!-- v2-results:start -->
-Not run yet.
+**Held-out, 102 scenes (headline split)** (configuration (c), 102 scenes; v2 made at `65d9457`)
+
+| Verifier | Precision | Recall | P@10 | Catch rate | False rejection |
+|---|---|---|---|---|---|
+| v1 (before) | 0.20 [0.13, 0.29] | 0.20 [0.11, 0.32] | 0.19 [0.07, 0.34]; returned 8.3 [6.7, 9.7] of 10 | 0.59 [0.57, 0.60] | 0.46 [0.44, 0.48] |
+| v2 (real-data fixes) | 0.18 [0.13, 0.28] | 0.24 [0.14, 0.37] | 0.24 [0.11, 0.39]; returned 9.3 [8.3, 10.0] of 10 | 0.59 [0.57, 0.60] | 0.46 [0.44, 0.48] |
+
+**Dev, 102 scenes** (configuration (c), 102 scenes; v2 made at `65d9457`)
+
+| Verifier | Precision | Recall | P@10 | Catch rate | False rejection |
+|---|---|---|---|---|---|
+| v1 (before) | 0.23 [0.12, 0.36] | 0.29 [0.14, 0.42] | 0.17 [0.04, 0.31]; returned 6.8 [3.8, 9.8] of 10 | 0.61 [0.59, 0.63] | 0.46 [0.42, 0.47] |
+| v2 (real-data fixes) | 0.21 [0.10, 0.36] | 0.32 [0.19, 0.45] | 0.17 [0.04, 0.31]; returned 7.1 [4.1, 10.0] of 10 | 0.60 [0.59, 0.62] | 0.45 [0.41, 0.47] |
+
+**Held-out, 29 index scenes** (configuration (c), 29 scenes; v2 made at `65d9457`)
+
+| Verifier | Precision | Recall | P@10 | Catch rate | False rejection |
+|---|---|---|---|---|---|
+| v1 (before) | 0.16 [0.09, 0.31] | 0.18 [0.09, 0.30] | 0.15 [0.05, 0.27]; returned 5.7 [3.7, 7.7] of 10 | 0.60 [0.59, 0.60] | 0.44 [0.42, 0.46] |
+| v2 (real-data fixes) | 0.17 [0.10, 0.31] | 0.24 [0.14, 0.36] | 0.21 [0.09, 0.35]; returned 7.6 [5.9, 9.2] of 10 | 0.59 [0.58, 0.60] | 0.44 [0.42, 0.46] |
+
+**Dev, 29 index scenes** (configuration (c), 29 scenes; v2 made at `65d9457`)
+
+| Verifier | Precision | Recall | P@10 | Catch rate | False rejection |
+|---|---|---|---|---|---|
+| v1 (before) | 0.20 [0.08, 0.41] | 0.34 [0.15, 0.51] | 0.13 [0.02, 0.27]; returned 5.7 [2.9, 8.5] of 10 | 0.60 [0.60, 0.61] | 0.43 [0.40, 0.45] |
+| v2 (real-data fixes) | 0.19 [0.07, 0.41] | 0.37 [0.19, 0.53] | 0.15 [0.03, 0.30]; returned 5.8 [3.0, 8.5] of 10 | 0.60 [0.59, 0.61] | 0.43 [0.39, 0.45] |
 <!-- v2-results:end -->
 
 ## Limits of the evaluation

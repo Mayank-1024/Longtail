@@ -69,6 +69,8 @@ All three breaks lowered precision or recall on every split and scene set; none 
 
 ![Ablation on the held-out queries: precision, recall, P@10 and catch rate for (a), (b) and (c)](docs/ablation-heldout.png)
 
+**v2, the fixes found by our real-data checks** (thin masks read as FAIL, jittery tracks, SAM's per-response object cap; A-245 to A-248), pre-registered at tag `v2-prereg` and evaluated once on the same held-out queries and 102 scenes: recall 0.24 [0.14, 0.37] (152 of 626 events, against v1's 128), P@10 0.24 [0.11, 0.39], precision 0.18 [0.13, 0.28]; catch rate (0.59) and false rejection (0.46) unchanged. The table above is v1. By the rule we set before scoring v2 (it had to raise precision or recall without lowering the other), v1 stays the headline, since v2 trades a little precision for recall. Both runs and the rule are in [docs/eval-report.md](docs/eval-report.md#v2-the-real-data-fixes-pre-registered); `LONGTAIL_VERIFIER=v2` selects v2.
+
 ## Run it
 
 ```bash
