@@ -17,7 +17,54 @@ function eta(sec: number): string {
 const STAGES = ["Plan", "Pick scenes", "Track (SAM 3.1)", "Verify (LiDAR)", "Finish"] as const;
 
 /** While a search runs: an animated loader with the stage, scenes verified and left, an estimate, and why. */
-export function WaitNotice({ events, startedAt }: { events: TraceEvent[]; startedAt: number }) {
+function span(sec: number): string {
+  if (sec < 60) return "under a minute";
+  const m = Math.round(sec / 60);
+  return m >= 90 ? `${(m / 60).toFixed(1)} h` : `${m} min`;
+}
+
+/** The approximate wait, next to the loader: an estimate first, then the pace measured in this search. */
+function EtaBox({ mode, stage, total, done, pace }: {
+  mode: string; stage: number; total: number; done: number; pace: number | null;
+}) {
+  let big: string;
+  let note: string;
+  let ready: number | null = null;
+  if (mode === "replay") {
+    big = "~10 s";
+    note = "a recorded run replays: no model calls, no cost";
+  } else if (stage <= 1) {
+    big = "~1 min";
+    note = `to plan and pick scenes, then about ${MIN_PER_SCENE} min a scene`;
+  } else if (stage === 4) {
+    big = "almost done";
+    note = "collecting the verified findings";
+  } else if (pace === null) {
+    big = span(total * MIN_PER_SCENE * 60);
+    note = `estimate for ${total} scene${total === 1 ? "" : "s"} · about ${MIN_PER_SCENE} min a scene on a laptop`;
+    ready = Date.now() + total * MIN_PER_SCENE * 60_000;
+  } else {
+    big = span(pace * (total - done));
+    note = `left, measured from this search's pace (${done} of ${total} done)`;
+    ready = Date.now() + pace * (total - done) * 1000;
+  }
+  return (
+    <div className="eta-box">
+      <div className="eta-label">estimated wait</div>
+      <div className="eta-big">{big}</div>
+      <div className="eta-note">{note}</div>
+      {ready !== null && (
+        <div className="eta-note">
+          ready around {new Date(ready).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function WaitNotice({ events, startedAt, mode = "live" }: {
+  events: TraceEvent[]; startedAt: number; mode?: string;
+}) {
   const elapsed = useElapsed(startedAt);
   const seen = useRef<number[]>([]); // when each event arrived, for the measured pace
   while (seen.current.length < events.length) seen.current.push(Date.now());
@@ -54,6 +101,8 @@ export function WaitNotice({ events, startedAt }: { events: TraceEvent[]; starte
   if (total > 0) stage = tracking ? 2 : 3;
   if (events.some((e) => e.name === "finish") || (total > 0 && left === 0 && last?.kind === "model")) stage = 4;
 
+  const since = lastTracked >= 0 ? seen.current[lastTracked] : startedAt;
+  const measured = done > 0 ? (doneAt[done - 1] - since) / 1000 / done : null;
   let headline: string;
   let sub: string;
   if (stage === 0) {
@@ -66,8 +115,7 @@ export function WaitNotice({ events, startedAt }: { events: TraceEvent[]; starte
     headline = `Tracking objects in ${total} scene${total === 1 ? "" : "s"}`;
     sub = "SAM 3.1 segments and tracks every named object through all six cameras.";
   } else if (stage === 3) {
-    const since = lastTracked >= 0 ? seen.current[lastTracked] : startedAt;
-    const pace = done > 0 ? (doneAt[done - 1] - since) / 1000 / done : MIN_PER_SCENE * 60;
+    const pace = measured ?? MIN_PER_SCENE * 60;
     headline = `${done} of ${total} scene${total === 1 ? "" : "s"} verified · ${left} left`;
     sub = `Checking every track against the LiDAR, frame by frame · ${eta(pace * left)}${done > 0 ? "" : " (estimate)"}`;
   } else {
@@ -91,6 +139,7 @@ export function WaitNotice({ events, startedAt }: { events: TraceEvent[]; starte
             )}
           </div>
         </div>
+        <EtaBox mode={mode} stage={stage} total={total} done={done} pace={measured} />
       </div>
       <Stages names={STAGES} now={stage} />
       {total > 0 && (

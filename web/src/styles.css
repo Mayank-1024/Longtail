@@ -380,3 +380,11 @@ kbd { font: 11px ui-monospace, Menlo, monospace; padding: 0 5px; border: 1px sol
   .intro *, .intro, .intro-leave, .app-enter { animation-duration: 0.01ms !important; animation-delay: 0s !important; animation-iteration-count: 1 !important; }
   .sweep-beam { animation: none; }
 }
+
+/* the estimated wait, next to the loader */
+.eta-box { margin-left: auto; flex: none; min-width: 200px; text-align: right; padding: 10px 14px; border: 1px solid var(--line);
+  border-radius: 10px; background: var(--panel-2); }
+.eta-label { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.eta-big { font-size: 26px; font-weight: 700; color: var(--accent); font-variant-numeric: tabular-nums; line-height: 1.2; }
+.eta-note { font-size: 12px; color: var(--muted); max-width: 240px; margin-left: auto; }
+@media (max-width: 900px) { .loader-top { flex-wrap: wrap; } .eta-box { margin-left: 0; text-align: left; } .eta-note { margin-left: 0; } }
