@@ -16,7 +16,7 @@ import numpy as np
 from longtail.contracts import CandidateWindow, Finding, ScenarioSpec
 from longtail.data.base import Scene
 from longtail.verify.engine import TrackSource
-from longtail.verify.run import VerifyRun, verify_and_record
+from longtail.verify.run import RUN_FILE, VerifyRun, load_run, verify_and_record
 
 # ASSUMPTION A-213: Glimmer triage is cut (plan cut list item 7): uniform 4 s windows with a 2 s stride
 WINDOW_S = 4.0
@@ -91,7 +91,14 @@ def scene_run_dir(spec: ScenarioSpec, scene_id: str, run_root: Path) -> Path:
 
 def search_scene(spec: ScenarioSpec, scene: Scene, track_source: TrackSource, run_root: Path) -> VerifyRun:
     run_dir = scene_run_dir(spec, scene.scene_id, run_root)
-    return verify_and_record(spec, uniform_windows(scene), scene, track_source, run_dir)
+    windows = uniform_windows(scene)
+    # ASSUMPTION A-243: with LONGTAIL_RESUME=1 (`longtail demo` sets it), a scene verified for this spec
+    # and these windows loads from its verify_run.json instead of being verified again
+    if os.environ.get("LONGTAIL_RESUME") == "1" and (run_dir / RUN_FILE).is_file():
+        saved = load_run(run_dir)
+        if saved.spec == spec and saved.windows == windows and saved.scene_id == scene.scene_id:
+            return saved
+    return verify_and_record(spec, windows, scene, track_source, run_dir)
 
 
 def concepts(spec: ScenarioSpec) -> list[str]:

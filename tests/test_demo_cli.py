@@ -62,3 +62,39 @@ def test_list_prints_the_recorded_searches(tmp_path, monkeypatch, capsys):
 def test_list_without_a_recorded_search_fails(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     assert main(["demo", "--list"]) == 1
+
+
+
+def test_resume_loads_a_verified_scene_instead_of_verifying_it_again(tmp_path, monkeypatch):
+    from synthetic import SyntheticScene, track_source
+
+    from longtail import pipeline
+    from longtail.contracts import ScenarioSpec
+
+    scene = SyntheticScene(scene_id="crossing")
+    source = track_source(scene, {"person": ["crosser"]})
+    spec = ScenarioSpec.model_validate(
+        {
+            "query": "a pedestrian",
+            "actors": [{"id": "a1", "cls": "pedestrian", "sam_prompt": "person"}],
+            "predicates": [{"name": "exists", "actors": ["a1"], "args": {}}],
+            "assumptions": [],
+            "clarification": None,
+        }
+    )
+    first = pipeline.search_scene(spec, scene, source, tmp_path)
+    calls = []
+    real = pipeline.verify_and_record
+    monkeypatch.setattr(pipeline, "verify_and_record", lambda *a, **k: calls.append(1) or real(*a, **k))
+
+    monkeypatch.delenv("LONGTAIL_RESUME", raising=False)
+    pipeline.search_scene(spec, scene, source, tmp_path)
+    assert calls == [1]  # off by default: verified again
+
+    monkeypatch.setenv("LONGTAIL_RESUME", "1")
+    again = pipeline.search_scene(spec, scene, source, tmp_path)
+    assert calls == [1] and again == first  # loaded, same findings
+
+    other = spec.model_copy(update={"query": "another query"})
+    pipeline.search_scene(other, scene, source, tmp_path)
+    assert calls == [1, 1]  # a different spec is never served from another's run

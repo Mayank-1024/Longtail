@@ -105,6 +105,7 @@ def _replay_env() -> None:
     os.environ["LONGTAIL_MODE"] = "replay"
     os.environ["LONGTAIL_REPLAY"] = "1"
     os.environ["LONGTAIL_ALLOW_PAID"] = "0"
+    os.environ["LONGTAIL_RESUME"] = "1"  # the recorded scenes load from runs/, not verified again
 
 
 def _headless(query: str) -> int:
