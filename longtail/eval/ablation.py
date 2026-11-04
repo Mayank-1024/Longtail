@@ -606,7 +606,8 @@ def git_commit() -> str:
 def thresholds_hash(verify_cfg: VerifyConfig, gt_cfg: gt.GtConfig) -> str:
     # ASSUMPTION A-140: results carry the commit (with -dirty for uncommitted changes) and a hash of the
     # verify.yaml and gt.yaml thresholds actually used
-    raw = verify_cfg.model_dump_json() + gt_cfg.model_dump_json()
+    # v2's optional fields are None in v1 and left out, so v1's hash is unchanged (A-244)
+    raw = verify_cfg.model_dump_json(exclude_none=True) + gt_cfg.model_dump_json(exclude_none=True)
     return hashlib.sha256(raw.encode()).hexdigest()[:16]
 
 

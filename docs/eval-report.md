@@ -1,6 +1,6 @@
 # Evaluation report
 
-Results and every deviation from the build plan, with the evidence for it. Numbers here come from tests or scripts in the repository; real-data results are added when PandaSet and SAM 3.1 output exist. Threshold changes after the freeze (plan C6) are recorded here with their justification on development queries only.
+Results and every deviation from the build plan, with the evidence for it. Numbers here come from tests or scripts in the repository; real-data results are added when PandaSet and SAM 3.1 output exist. Threshold changes after the first evaluation (v1) are recorded here, pre-registered before they are run (v2, below).
 
 ## C1: dataset adapter
 
@@ -271,15 +271,70 @@ The real-data checks above point the same way. Where the evidence is thin (a far
 
 It is not wrong-free. The one way it gives a confident wrong answer in these checks is thin masks of partly hidden objects, which come out FAIL instead of UNVERIFIABLE (3 of 20 masks). Its wrong clusters (2 of 20) put points on something in front of the object or on only a corner of it.
 
-### Known limitations, fixes after submission
+### Found by the real-data checks, fixed in v2
 
-The thresholds and rules are frozen for the evaluation, so these are listed rather than changed.
+v1's thresholds and rules were fixed before its run, so these checks did not change v1. Each finding below has a fix in v2 (next section), pre-registered and evaluated once; the four fixes run together, so the v1-to-v2 change in the results table is their combined effect.
 
-- **A-110: truncation is under-flagged.** SAM caps a response at 16 objects, not 16 per frame; A-110 marks 3 of the 16 capped responses. Fix: also mark a response truncated when it has 16 distinct object ids, and send crowded cameras as shorter clips or halves (A-118), which costs new SAM calls.
-- **A-50: the 3 px erosion empties thin masks.** Fix: erode less, or not at all, when the eroded mask would hold fewer than a few pixels or points.
-- **A-46: a thin mask with no points is read as FAIL.** A-46's wording says skipped frames become UNVERIFIABLE; the verifier follows the plan's C6 rule instead (good coverage with no object points is evidence against the object). Fix: treat `no_points` and `no_cluster` as UNVERIFIABLE when the eroded mask is small, and bring A-46's wording in line with the code.
-- **A-77: jump rejection drops most steps on real tracks** (1,050 of 1,350 on the parked cars). Fix: reject the single outlying sample (for example by a median test) instead of every 1 s window that contains a jump.
-- **The smoothing window (plan: 5 samples; quadratic fit, A-66) is too short for real jitter.** Fix: a longer window (11 trimmed the synthetic spikes, C5 above) or a robust fit, tuned on development queries.
+- **A-110: truncation is under-flagged.** SAM caps a response at 16 objects, not 16 per frame; A-110 marks 3 of the 16 capped responses. v2 (A-248) also marks a response truncated when it has 16 distinct object ids.
+- **A-50: the 3 px erosion empties thin masks.** v2 (A-245) keeps the uneroded mask when erosion would leave fewer than 50 pixels.
+- **A-46: a thin mask with no points is read as FAIL.** A-46's wording says skipped frames become UNVERIFIABLE; v1 follows the plan's C6 rule instead (good coverage with no object points is evidence against the object). v2 (A-246) reads no points or no cluster as UNVERIFIABLE when the mask could not be expected to hold a cluster.
+- **A-77: jump rejection drops most steps on real tracks** (1,050 of 1,350 on the parked cars). v2 (A-247) drops the single outlying samples instead and judges the windows.
+- **The smoothing window (plan: 5 samples; quadratic fit, A-66) is too short for real jitter.** v2 (A-247) smooths over 11 samples (11 trimmed the synthetic spikes, C5 above).
+
+Not fixed in v2: crowded cameras re-sent as shorter clips or halves (A-118), which needs new paid SAM calls; see the limits below.
+
+## v2: the real-data fixes, pre-registered
+
+v1 is the first pre-registered evaluation: its queries were fixed before any run (tag `eval-freeze`, `e43cfa0`) and its thresholds before the run. v2 is the fixes above, pre-registered at tag `v2-prereg` (`851a833`) before any v2 run, and evaluated once. Both are reported, whatever they show.
+
+**Which is the headline.** The pre-registration at `v2-prereg` said v1 would stay the headline. On Nov 3 at about 22:15 ET, after the v2 runs but before any v2 result was scored or seen, we changed only this reporting rule (this commit): **v2 becomes the headline if, on the held-out split over 102 scenes, it raises the precision or the recall of (c) without lowering the other** (point values); otherwise v1 stays the headline. The other is shown beside it, v1 as the before.
+
+The changes come from the real-data checks of Nov 3 (C4 real masks, C5 parked cars, SAM's object cap), not from the evaluation results; but the people who wrote them had seen v1's held-out aggregate numbers, so v2 is not a blind result. Its parameters were fixed at tag `v2-prereg`, before any v2 run, and are not changed after it. A bug fix that leaves the parameters alone is allowed and is listed here if made. The parameters were checked only on synthetic unit tests (`tests/test_verifier_v2.py`).
+
+v2 is `configs/verify_v2.yaml`, chosen by `LONGTAIL_VERIFIER=v2` (A-244). It is `verify.yaml` plus exactly these fields (a test checks nothing else differs); with the switch off, v1 reproduces exactly, thresholds hash `aedd697d2cbb2e1d` included.
+
+| Fix | Limitation | v2 rule | Parameters |
+|---|---|---|---|
+| A-245 | A-50: erosion empties thin masks | An eroded mask under `min_eroded_px` pixels falls back to the uneroded mask | `min_eroded_px: 50` |
+| A-246 | A-46: a thin mask with no points reads as FAIL | No points or no cluster is FAIL only when the selection should hold points: in-box coverage times the selected share of the box at least `dbscan_min_points`; otherwise UNVERIFIABLE (`thin_mask`) | `thin_mask_unverifiable: true` (threshold: the existing `dbscan_min_points: 5`) |
+| A-247 | A-77 and the smoothing window: jitter drops most motion windows | Drop single outlying samples: further than `outlier_m` from every interpolation of the sample between its k-th neighbours either side (k = 1 to 3); judge windows that contain a jump; smooth over 11 samples | `outlier_window: 7`, `outlier_m: 1.0`, `drop_jump_windows: false`, `savgol_window: 11` |
+| A-248 | A-110: truncation under-flagged | A SAM response with 16 distinct object ids marks all its tracks truncated (as well as A-110's per-frame rule) | `truncated_min_objects: 16` |
+
+**What is run:** configuration (c) only, on all 102 scenes, both splits, from the same replayed SAM responses as v1 (no paid calls), on Explorer with `scripts/explorer/eval_v2.sbatch` and `scripts/explorer/score_v2.sbatch`. (a) and (b) do not use the verifier and are unchanged. The breaks are not rerun for v2. Results go to `longtail/eval/runs/<set>-<split>-v2/results/` (the first scoring submission wrote to `results_v2/`, which A-140's results-directory check refused; only the path changed).
+
+**Outcome.** On the held-out split over 102 scenes, v2 raises recall from 0.204 to 0.243 (152 of 626 events matched, against 128) and P@10 from 0.19 to 0.24, and lowers precision from 0.199 to 0.185; every change lies inside the intervals. By the rule above (raise one without lowering the other), **v1 stays the headline**. Catch rate and false rejection do not move (0.59 and 0.46): the fixes find more true events, but do not change how well the verifier separates false claims from true ones. The dev split and the 29 index scenes show the same pattern: recall up on all three, precision within 0.02 either way.
+
+Provenance: the v2 partials were made on Explorer by `scripts/explorer/eval_v2.sbatch` (job 11603273, 102 tasks, Nov 3 21:31 to 22:05 ET) with the code of `v2-prereg` (`851a833`) copied into the cluster checkout, and scored by `score_v2.sbatch` (job 11605101). The cluster checkout's git HEAD is still `65d9457`, so the results' `commit` field reads `65d9457…-dirty`; the v2 thresholds hash `61e4c64ec1dae446` (checked by `scripts/report_v2.py`) identifies the v2 configuration. The first scoring job (11604805) was cancelled after its results-directory check refused `results_v2/`; nothing else was rerun.
+
+<!-- v2-results:start -->
+**Held-out, 102 scenes (headline split)** (configuration (c), 102 scenes; v2 made at `65d9457`)
+
+| Verifier | Precision | Recall | P@10 | Catch rate | False rejection |
+|---|---|---|---|---|---|
+| v1 (before) | 0.20 [0.13, 0.29] | 0.20 [0.11, 0.32] | 0.19 [0.07, 0.34]; returned 8.3 [6.7, 9.7] of 10 | 0.59 [0.57, 0.60] | 0.46 [0.44, 0.48] |
+| v2 (real-data fixes) | 0.18 [0.13, 0.28] | 0.24 [0.14, 0.37] | 0.24 [0.11, 0.39]; returned 9.3 [8.3, 10.0] of 10 | 0.59 [0.57, 0.60] | 0.46 [0.44, 0.48] |
+
+**Dev, 102 scenes** (configuration (c), 102 scenes; v2 made at `65d9457`)
+
+| Verifier | Precision | Recall | P@10 | Catch rate | False rejection |
+|---|---|---|---|---|---|
+| v1 (before) | 0.23 [0.12, 0.36] | 0.29 [0.14, 0.42] | 0.17 [0.04, 0.31]; returned 6.8 [3.8, 9.8] of 10 | 0.61 [0.59, 0.63] | 0.46 [0.42, 0.47] |
+| v2 (real-data fixes) | 0.21 [0.10, 0.36] | 0.32 [0.19, 0.45] | 0.17 [0.04, 0.31]; returned 7.1 [4.1, 10.0] of 10 | 0.60 [0.59, 0.62] | 0.45 [0.41, 0.47] |
+
+**Held-out, 29 index scenes** (configuration (c), 29 scenes; v2 made at `65d9457`)
+
+| Verifier | Precision | Recall | P@10 | Catch rate | False rejection |
+|---|---|---|---|---|---|
+| v1 (before) | 0.16 [0.09, 0.31] | 0.18 [0.09, 0.30] | 0.15 [0.05, 0.27]; returned 5.7 [3.7, 7.7] of 10 | 0.60 [0.59, 0.60] | 0.44 [0.42, 0.46] |
+| v2 (real-data fixes) | 0.17 [0.10, 0.31] | 0.24 [0.14, 0.36] | 0.21 [0.09, 0.35]; returned 7.6 [5.9, 9.2] of 10 | 0.59 [0.58, 0.60] | 0.44 [0.42, 0.46] |
+
+**Dev, 29 index scenes** (configuration (c), 29 scenes; v2 made at `65d9457`)
+
+| Verifier | Precision | Recall | P@10 | Catch rate | False rejection |
+|---|---|---|---|---|---|
+| v1 (before) | 0.20 [0.08, 0.41] | 0.34 [0.15, 0.51] | 0.13 [0.02, 0.27]; returned 5.7 [2.9, 8.5] of 10 | 0.60 [0.60, 0.61] | 0.43 [0.40, 0.45] |
+| v2 (real-data fixes) | 0.19 [0.07, 0.41] | 0.37 [0.19, 0.53] | 0.15 [0.03, 0.30]; returned 5.8 [3.0, 8.5] of 10 | 0.60 [0.59, 0.61] | 0.43 [0.39, 0.45] |
+<!-- v2-results:end -->
 
 ## Limits of the evaluation
 
@@ -287,7 +342,8 @@ The thresholds and rules are frozen for the evaluation, so these are listed rath
 - **The held-out split is by query, not by scene.** The 15 held-out queries are scored on the same 102 scenes as the 10 development queries. Held-out numbers measure how the system does on new queries, not on new scenes or places.
 - **Development tuning used the same 102 scenes.** Anything adjusted on development queries (thresholds, prompts) saw every scene the held-out queries are scored on.
 - **Concept phrases were not tuned** (C3 above); per-class SAM recall is not measured.
-- **Four queries were replaced on Nov 3, after the plan's Oct 31 freeze,** because they had no positives in any of the 103 scenes. The replacement rule was written down before counting (A-228).
+- **SAM's 16-object cap is not worked around.** A crowded camera loses the objects SAM never allocated; v2 only marks such responses truncated (A-248). Re-sending crowded cameras as halves (A-118) would recover them but needs new paid SAM calls.
+- **Four queries were replaced on Nov 3, after the plan's Oct 31 date for fixing the queries but before any evaluation run,** because they had no positives in any of the 103 scenes. The replacement rule was written down before counting (A-228).
 - **No triage:** Glimmer was cut, so configuration (d) is not run (A-213).
 - **Recall is a lower bound.** The ground truth counts a labelled object wherever its cuboid projects into a synced camera image within 60 m, with no occlusion test (A-122), so it includes objects that are hidden behind others or too dark to see. The system cannot find those, so measured recall understates recall on visible objects. Checked by eye on 5 random positives: in a night scene (058) most of the labelled pedestrians are hard to see or behind parked cars.
 - **Pickups count as trucks** (A-123), as documented. A query for a truck can be satisfied by a parked pickup; one of the 5 positives checked by eye was exactly that (scene 058).
@@ -324,4 +380,4 @@ A break passes when it lowers precision, the catch rate or recall of (c); one th
 
 Provenance: the per-scene runs were made at `65d9457` on Explorer; they were scored at `65d9457-dirty`, whose only changes are commit `c446597` (scoring reads the clean partials from the breaks entry point and memoises the label projections per frame; no metric changes, tests show the same outcomes). Secondary results over the 29 index scenes and the dev split are in `longtail/eval/runs/{index-heldout,index-dev,all-dev}/results/`; no break is a hole in any of them.
 
-Tags: `eval-freeze` and `eval-final` were both created on Nov 3 at 19:25 ET, after the run, not when the queries were frozen. They point at the right commits. `eval-freeze` is `e43cfa0` (Nov 3, 05:54), the last change to the queries (the A-228 replacements). `eval-final` is `f80a4d6`, the merge that committed these results. The results were made at `65d9457`, between the two: `e43cfa0` is an ancestor of `65d9457`, which is an ancestor of `f80a4d6`. The queries did not change from `eval-freeze` to `65d9457`, and the configs did not change from `65d9457` to `eval-final`.
+Tags: `eval-freeze` and `eval-final` were both created on Nov 3 at 19:25 ET, after the run, not when the queries were fixed. They point at the right commits. `eval-freeze` is `e43cfa0` (Nov 3, 05:54): the queries, fixed before any run, as last changed by the A-228 replacements. `eval-final` is `f80a4d6`, the merge that committed these results. The results were made at `65d9457`, between the two: `e43cfa0` is an ancestor of `65d9457`, which is an ancestor of `f80a4d6`. The queries did not change from `eval-freeze` to `65d9457`, and the configs did not change from `65d9457` to `eval-final`.

@@ -1,0 +1,318 @@
+{
+ "format": "longtail.ablation/v1",
+ "config": "c",
+ "description": "+ LiDAR verification",
+ "commit": "65d94579418143235d4d07ba5f02d3678dcce367-dirty",
+ "thresholds_hash": "61e4c64ec1dae446",
+ "gt_config_hash": "033c8400c091cf16",
+ "split": "dev",
+ "scenes": [
+  "005",
+  "006",
+  "008",
+  "011",
+  "012",
+  "013",
+  "014",
+  "015",
+  "016",
+  "017",
+  "018",
+  "019",
+  "020",
+  "021",
+  "023",
+  "041",
+  "048",
+  "050",
+  "058",
+  "059",
+  "062",
+  "063",
+  "074",
+  "079",
+  "103",
+  "109",
+  "117",
+  "124",
+  "158"
+ ],
+ "bootstrap": {
+  "resamples": 1000,
+  "seed": 20261103,
+  "over": "queries"
+ },
+ "metrics": {
+  "precision": {
+   "value": 0.19117647058823528,
+   "ci95": [
+    0.07251770107312755,
+    0.40541878512175544
+   ]
+  },
+  "recall": {
+   "value": 0.37410071942446044,
+   "ci95": [
+    0.18960129310344828,
+    0.5260485197368421
+   ]
+  },
+  "p_at_10": {
+   "value": 0.15,
+   "ci95": [
+    0.03,
+    0.29999999999999993
+   ]
+  },
+  "returned_top10": {
+   "value": 5.8,
+   "ci95": [
+    3.0,
+    8.5
+   ]
+  },
+  "cost_per_query_usd": {
+   "value": 3.196800000000002,
+   "ci95": [
+    2.7840000000000016,
+    3.7536000000000023
+   ]
+  },
+  "seconds_per_query": {
+   "value": 1230.398025701975,
+   "ci95": [
+    110.8500928574457,
+    2792.2760821885577
+   ]
+  },
+  "catch_rate": {
+   "value": 0.6007726202692099,
+   "ci95": [
+    0.5934313972184756,
+    0.6067801620694956
+   ]
+  },
+  "false_rejection_rate": {
+   "value": 0.4265739429469581,
+   "ci95": [
+    0.39359729566905416,
+    0.4470310948396635
+   ]
+  },
+  "hallucination_rate": {
+   "value": 0.08035894015643,
+   "ci95": [
+    0.06818899740239637,
+    0.10084928639567299
+   ]
+  },
+  "queries": 10,
+  "queries_with_no_output": 3,
+  "positives": 139,
+  "claims_false": 33134,
+  "claims_true": 379191
+ },
+ "queries": [
+  {
+   "query_id": "bus_ahead_30",
+   "positives": 7,
+   "returned": 12,
+   "matched": 0,
+   "precision": 0.0,
+   "p_at_10": 0.0,
+   "returned_top10": 10,
+   "cost_usd": 2.784,
+   "seconds": 725.928,
+   "claims_false": 511,
+   "claims_true": 2803,
+   "claims_false_checked": 511,
+   "claims_false_caught": 326,
+   "claims_true_checked": 2803,
+   "claims_true_rejected": 1360,
+   "windows": 203,
+   "claims": 3314,
+   "hallucinated_claims": 511
+  },
+  {
+   "query_id": "ped_within_5",
+   "positives": 5,
+   "returned": 5,
+   "matched": 3,
+   "precision": 0.6,
+   "p_at_10": 0.3,
+   "returned_top10": 5,
+   "cost_usd": 2.784,
+   "seconds": 3726.978,
+   "claims_false": 3978,
+   "claims_true": 37010,
+   "claims_false_checked": 3978,
+   "claims_false_caught": 2410,
+   "claims_true_checked": 37010,
+   "claims_true_rejected": 14597,
+   "windows": 203,
+   "claims": 40988,
+   "hallucinated_claims": 3978
+  },
+  {
+   "query_id": "car_behind_10",
+   "positives": 50,
+   "returned": 65,
+   "matched": 29,
+   "precision": 0.4461538461538462,
+   "p_at_10": 0.7,
+   "returned_top10": 10,
+   "cost_usd": 2.784,
+   "seconds": 7453.517,
+   "claims_false": 4028,
+   "claims_true": 75814,
+   "claims_false_checked": 4028,
+   "claims_false_caught": 2374,
+   "claims_true_checked": 75814,
+   "claims_true_rejected": 35994,
+   "windows": 203,
+   "claims": 79842,
+   "hallucinated_claims": 4028
+  },
+  {
+   "query_id": "ped_crossing_ego_moving",
+   "positives": 1,
+   "returned": 0,
+   "matched": 0,
+   "precision": null,
+   "p_at_10": 0.0,
+   "returned_top10": 0,
+   "cost_usd": 2.784,
+   "seconds": 48.333,
+   "claims_false": 3978,
+   "claims_true": 37010,
+   "claims_false_checked": 3978,
+   "claims_false_caught": 2410,
+   "claims_true_checked": 37010,
+   "claims_true_rejected": 14597,
+   "windows": 203,
+   "claims": 40988,
+   "hallucinated_claims": 3978
+  },
+  {
+   "query_id": "cyclist_moving_ego_moving",
+   "positives": 16,
+   "returned": 22,
+   "matched": 7,
+   "precision": 0.3181818181818182,
+   "p_at_10": 0.4,
+   "returned_top10": 10,
+   "cost_usd": 2.784,
+   "seconds": 20.048,
+   "claims_false": 167,
+   "claims_true": 812,
+   "claims_false_checked": 167,
+   "claims_false_caught": 35,
+   "claims_true_checked": 812,
+   "claims_true_rejected": 124,
+   "windows": 203,
+   "claims": 979,
+   "hallucinated_claims": 167
+  },
+  {
+   "query_id": "ped_walking_ego_moving",
+   "positives": 29,
+   "returned": 91,
+   "matched": 5,
+   "precision": 0.054945054945054944,
+   "p_at_10": 0.0,
+   "returned_top10": 10,
+   "cost_usd": 2.784,
+   "seconds": 33.929,
+   "claims_false": 3978,
+   "claims_true": 37010,
+   "claims_false_checked": 3978,
+   "claims_false_caught": 2410,
+   "claims_true_checked": 37010,
+   "claims_true_rejected": 14597,
+   "windows": 203,
+   "claims": 40988,
+   "hallucinated_claims": 3978
+  },
+  {
+   "query_id": "ped_walking_ego_stopped",
+   "positives": 1,
+   "returned": 3,
+   "matched": 1,
+   "precision": 0.3333333333333333,
+   "p_at_10": 0.1,
+   "returned_top10": 3,
+   "cost_usd": 2.784,
+   "seconds": 34.399,
+   "claims_false": 3978,
+   "claims_true": 37010,
+   "claims_false_checked": 3978,
+   "claims_false_caught": 2410,
+   "claims_true_checked": 37010,
+   "claims_true_rejected": 14597,
+   "windows": 203,
+   "claims": 40988,
+   "hallucinated_claims": 3978
+  },
+  {
+   "query_id": "two_peds_within_2",
+   "positives": 28,
+   "returned": 74,
+   "matched": 7,
+   "precision": 0.0945945945945946,
+   "p_at_10": 0.0,
+   "returned_top10": 10,
+   "cost_usd": 2.784,
+   "seconds": 80.225,
+   "claims_false": 3978,
+   "claims_true": 37010,
+   "claims_false_checked": 3978,
+   "claims_false_caught": 2410,
+   "claims_true_checked": 37010,
+   "claims_true_rejected": 14597,
+   "windows": 203,
+   "claims": 40988,
+   "hallucinated_claims": 3978
+  },
+  {
+   "query_id": "cyclist_hidden_by_truck",
+   "positives": 1,
+   "returned": 0,
+   "matched": 0,
+   "precision": null,
+   "p_at_10": 0.0,
+   "returned_top10": 0,
+   "cost_usd": 4.128,
+   "seconds": 27.216,
+   "claims_false": 532,
+   "claims_true": 1888,
+   "claims_false_checked": 532,
+   "claims_false_caught": 337,
+   "claims_true_checked": 1888,
+   "claims_true_rejected": 699,
+   "windows": 203,
+   "claims": 2420,
+   "hallucinated_claims": 532
+  },
+  {
+   "query_id": "ped_crossing_car_stopped_right",
+   "positives": 1,
+   "returned": 0,
+   "matched": 0,
+   "precision": null,
+   "p_at_10": 0.0,
+   "returned_top10": 0,
+   "cost_usd": 5.568,
+   "seconds": 153.407,
+   "claims_false": 8006,
+   "claims_true": 112824,
+   "claims_false_checked": 8006,
+   "claims_false_caught": 4784,
+   "claims_true_checked": 112824,
+   "claims_true_rejected": 50591,
+   "windows": 203,
+   "claims": 120830,
+   "hallucinated_claims": 8006
+  }
+ ],
+ "created_utc": "2026-11-04T03:32:50+00:00"
+}

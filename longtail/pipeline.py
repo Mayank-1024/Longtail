@@ -15,6 +15,7 @@ import numpy as np
 
 from longtail.contracts import CandidateWindow, Finding, ScenarioSpec
 from longtail.data.base import Scene
+from longtail.verify.config import verifier_version
 from longtail.verify.engine import TrackSource
 from longtail.verify.run import RUN_FILE, VerifyRun, load_run, verify_and_record
 
@@ -86,7 +87,10 @@ def spec_run_id(spec: ScenarioSpec) -> str:
 
 
 def scene_run_dir(spec: ScenarioSpec, scene_id: str, run_root: Path) -> Path:
-    return Path(run_root) / f"{spec_run_id(spec)}-{scene_id}"
+    # ASSUMPTION A-244: a v2 verifier run gets its own directory (suffix -v2), so a v1 run, its viz and its
+    # cards are never read back into a v2 search, or the other way round
+    suffix = "-v2" if verifier_version() == "v2" else ""
+    return Path(run_root) / f"{spec_run_id(spec)}-{scene_id}{suffix}"
 
 
 def search_scene(spec: ScenarioSpec, scene: Scene, track_source: TrackSource, run_root: Path) -> VerifyRun:

@@ -2,6 +2,7 @@
 
 # ASSUMPTION A-58: every threshold lives in configs/verify.yaml; the loader has no defaults in code
 
+import os
 from functools import cache
 from pathlib import Path
 from typing import Literal
@@ -10,6 +11,10 @@ import yaml
 from pydantic import BaseModel, ConfigDict, Field
 
 CONFIG_PATH = Path(__file__).resolve().parents[2] / "configs" / "verify.yaml"
+# ASSUMPTION A-244: the second verifier (v2) is configs/verify_v2.yaml, chosen by LONGTAIL_VERIFIER=v2.
+# Its fields are optional and absent from verify.yaml, where None keeps v1's behaviour, so v1 results, its
+# thresholds hash (dumped without None fields) and the recorded demo reproduce exactly
+CONFIG_PATHS = {"v1": CONFIG_PATH, "v2": CONFIG_PATH.with_name("verify_v2.yaml")}
 
 
 class _Strict(BaseModel):
@@ -41,6 +46,12 @@ class MergeConfig(_Strict):
 
 class AssociationConfig(_Strict):
     erode_px: int = Field(ge=0)
+    # v2 (A-245): an eroded mask under this many pixels falls back to the uneroded mask
+    min_eroded_px: int | None = Field(default=None, ge=0)
+    # v2 (A-246): no points or cluster in a mask expected to hold under dbscan_min_points is UNVERIFIABLE
+    thin_mask_unverifiable: bool | None = None
+    # v2 (A-248): a SAM response with this many distinct objects marks all its tracks truncated
+    truncated_min_objects: int | None = Field(default=None, ge=1)
     min_coverage: int = Field(ge=0)
     ground_height_m: float
     visibility_cell_px: int = Field(ge=0)
@@ -66,6 +77,9 @@ class TracksConfig(_Strict):
     occluder_radius_px: float = Field(gt=0)
     occluder_margin_m: float = Field(ge=0)
     spacing_factor: float = Field(ge=0)
+    # v2 (A-247): drop a sample further than outlier_m from every neighbour interpolation of it
+    outlier_window: int | None = Field(default=None, ge=3)
+    outlier_m: float | None = Field(default=None, gt=0)
 
 
 class EgoPathConfig(_Strict):
@@ -97,6 +111,8 @@ class MotionConfig(_Strict):
     stopped_mps: float = Field(ge=0)
     window_s: float = Field(gt=0)
     max_accel_mps2: float = Field(gt=0)
+    # v2 (A-247): False judges windows that contain a jump (outlying samples are dropped upstream instead)
+    drop_jump_windows: bool | None = None
 
 
 class CrossingConfig(_Strict):
@@ -134,7 +150,21 @@ class VerifyConfig(_Strict):
     engine: EngineConfig
 
 
+def verifier_version() -> str:
+    v = os.environ.get("LONGTAIL_VERIFIER", "v1")
+    if v not in CONFIG_PATHS:
+        raise ValueError(f"LONGTAIL_VERIFIER={v!r}: expected one of {sorted(CONFIG_PATHS)}")
+    return v
+
+
+def load_verify_config(path: Path | None = None) -> VerifyConfig:
+    return _load(path or CONFIG_PATHS[verifier_version()])
+
+
 @cache
-def load_verify_config(path: Path = CONFIG_PATH) -> VerifyConfig:
+def _load(path: Path) -> VerifyConfig:
     with open(path) as f:
         return VerifyConfig.model_validate(yaml.safe_load(f))
+
+
+load_verify_config.cache_clear = _load.cache_clear  # type: ignore[attr-defined]

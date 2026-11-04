@@ -77,7 +77,8 @@ def steps(series: Series, cfg: MotionConfig) -> list[Step]:
             start = min(max(t[j] - cfg.window_s / 2, t[0]), t[-1] - cfg.window_s)
             a = int(np.searchsorted(t, start - 1e-6))
             b = int(np.searchsorted(t, start + cfg.window_s + 1e-6)) - 1
-            if jump[a : b + 1].any():
+            # ASSUMPTION A-247: (v2) drop_jump_windows false judges the window; outliers were dropped upstream
+            if cfg.drop_jump_windows is not False and jump[a : b + 1].any():
                 out[k] = Step(None, None, Reason.IMPLAUSIBLE_JUMP)
                 continue
             p = series.position[idx]

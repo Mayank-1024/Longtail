@@ -38,7 +38,7 @@ ADJACENT_CAMERAS = {
 }
 
 # ASSUMPTION A-46: frames without a sample are recorded with a reason; C6 reads them as UNVERIFIABLE
-SkipReason = Literal["unsynced", "low_coverage", "no_points", "no_cluster"]
+SkipReason = Literal["unsynced", "low_coverage", "no_points", "no_cluster", "thin_mask"]
 
 
 @dataclass(frozen=True)
@@ -211,19 +211,24 @@ def nearest_depth_part(depth: np.ndarray, cfg: AssociationConfig) -> np.ndarray:
     return max(parts, key=len)
 
 
-def _selected(frame: Frame2D, pixels: np.ndarray, cfg: AssociationConfig) -> np.ndarray:
+def _selected(frame: Frame2D, pixels: np.ndarray, cfg: AssociationConfig) -> tuple[np.ndarray, int]:
+    """Which projected points the mask (or inset box) selects, and the selected area in pixels."""
     e = cfg.erode_px
     if cfg.selection == "mask" and frame.mask_rle is not None:
         mask = decode(frame.mask_rle)
         if e:
             # ASSUMPTION A-50: erosion by a disk of erode_px
-            mask = binary_erosion(mask, structure=_disk(e))
-        return mask[pixels[:, 1], pixels[:, 0]]
+            eroded = binary_erosion(mask, structure=_disk(e))
+            # ASSUMPTION A-245: (v2) a thin mask that erosion (nearly) empties keeps its uneroded pixels
+            if cfg.min_eroded_px is None or eroded.sum() >= cfg.min_eroded_px:
+                mask = eroded
+        return mask[pixels[:, 1], pixels[:, 0]], int(mask.sum())
     # Frustum fallback or box-only claim (plan C4 steps 7 and 8).
     # ASSUMPTION A-50: boxes are inset by erode_px, like the mask
     x1, y1, x2, y2 = np.round(frame.box_xyxy).astype(int)
     u, v = pixels[:, 0], pixels[:, 1]
-    return (u >= x1 + e) & (u <= x2 - e) & (v >= y1 + e) & (v <= y2 - e)
+    area = max(0, x2 - x1 - 2 * e + 1) * max(0, y2 - y1 - 2 * e + 1)
+    return (u >= x1 + e) & (u <= x2 - e) & (v >= y1 + e) & (v <= y2 - e), area
 
 
 def _frame(
@@ -265,21 +270,29 @@ def _frame(
     if coverage < cfg.min_coverage:
         return skip("low_coverage", coverage)
 
-    sel = _selected(frame, pixels, cfg)
+    sel, area = _selected(frame, pixels, cfg)
+    # ASSUMPTION A-246: (v2) the points the selection should hold if spread evenly over the box; with fewer
+    # than dbscan_min_points expected, an empty selection is no evidence against the object
+    expected = coverage * min(1.0, area / max(1, (x2 - x1 + 1) * (y2 - y1 + 1)))
+    thin = bool(cfg.thin_mask_unverifiable) and expected < cfg.dbscan_min_points
+
+    def empty(reason: SkipReason) -> FrameSkip:
+        return skip("thin_mask" if thin else reason, coverage)
+
     idx, depth, pix = proj.index[sel], proj.depth[sel], pixels[sel]
     if len(idx) == 0:
-        return skip("no_points", coverage)
+        return empty("no_points")
     above, ground, plane = remove_ground(ctx.xyz[idx], ctx, cfg)
     idx, depth, pix = idx[above], depth[above], pix[above]
     seen = visible_in_camera(pix, depth, cfg)
     idx, depth = idx[seen], depth[seen]
     if len(idx) < cfg.dbscan_min_points:
-        return skip("no_cluster", coverage)
+        return empty("no_cluster")
     part = nearest_depth_part(depth, cfg)
     idx = idx[part]
     labels = DBSCAN(eps=cfg.dbscan_eps_m, min_samples=cfg.dbscan_min_points).fit(ctx.xyz[idx]).labels_
     if np.all(labels < 0):
-        return skip("no_cluster", coverage)
+        return empty("no_cluster")
     largest = np.bincount(labels[labels >= 0]).argmax()
     return FrameCluster(
         camera=camera,

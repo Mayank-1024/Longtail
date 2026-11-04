@@ -32,6 +32,7 @@ class Reason(StrEnum):
     OUT_OF_RANGE = "out_of_range"  # beyond max_range_m
     UNSYNCED = "unsynced"  # camera frame over 50 ms from its sweep (C2)
     TRUNCATED = "truncated"  # object missing and SAM hit its 16-object cap
+    THIN_MASK = "thin_mask"  # v2: the mask is too thin to expect LiDAR points in it (A-246)
     NOT_OBSERVED = "not_observed"  # the bound track has no observation at this frame
     TRACK_TOO_SHORT = "track_too_short"  # under the 1 s needed, or ends before the look-ahead
     UNRELIABLE_SPEED = "unreliable_speed"  # speed series too short to smooth (A-71)
@@ -57,6 +58,7 @@ UNVERIFIABLE_REASONS = {
     Reason.OUT_OF_RANGE,
     Reason.UNSYNCED,
     Reason.TRUNCATED,
+    Reason.THIN_MASK,
     Reason.NOT_OBSERVED,
     Reason.TRACK_TOO_SHORT,
     Reason.UNRELIABLE_SPEED,
@@ -119,7 +121,7 @@ class Context:
         if key not in self._skips:
             sweeps = self.scene.lidar_timestamps()
             # Coverage-was-fine reasons outrank no-coverage, which outranks unsynced.
-            rank = {"no_points": 3, "no_cluster": 3, "low_coverage": 2, "unsynced": 1}
+            rank = {"no_points": 3, "no_cluster": 3, "low_coverage": 2, "thin_mask": 2, "unsynced": 1}
             by_sweep: dict[float, str] = {}
             skips = obj.association.skipped
             if skips:
@@ -146,6 +148,8 @@ def missing(ctx: Context, obj: TrackedObject, ts: float) -> FrameResult:
         return FrameResult.unverifiable(Reason.UNSYNCED)
     if why == "low_coverage":
         return FrameResult.unverifiable(Reason.NO_COVERAGE)
+    if why == "thin_mask":  # v2 (A-246): too thin a mask to expect points, so no evidence either way
+        return FrameResult.unverifiable(Reason.THIN_MASK)
     if why in ("no_points", "no_cluster"):
         # Coverage was fine, but nothing survived ground removal and clustering: evidence against the object.
         return FrameResult("FAIL", Reason.NO_OBJECT_POINTS, value=0.0, margin=-1.0)

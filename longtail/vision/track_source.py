@@ -11,6 +11,7 @@ from typing import Literal
 
 from longtail.contracts import Track2D
 from longtail.data.base import Scene
+from longtail.verify.config import load_verify_config
 from longtail.vision.clips import Clip, build_clip, cache_root
 from longtail.vision.sam_client import SamClient, transport_from_env
 from longtail.vision.sam_parse import parse
@@ -51,6 +52,15 @@ def cached_parse(text: str, clip: Clip, concept: str) -> list[Track2D]:
     return tracks
 
 
+def _capped(tracks: list[Track2D]) -> list[Track2D]:
+    """v2 (A-248): every track of a response with truncated_min_objects distinct objects is truncated."""
+    n = load_verify_config().association.truncated_min_objects
+    # ASSUMPTION A-248: (v2) SAM's cap is per response, so 16 distinct objects mean later ones may be missing
+    if n is None or len({t.obj_id for t in tracks}) < n:
+        return tracks
+    return [t.model_copy(update={"truncated": True}) for t in tracks]
+
+
 def _tracks(
     client: SamClient,
     scene: Scene,
@@ -61,11 +71,11 @@ def _tracks(
 ) -> list[Track2D]:
     if crop == "full":
         clip = build_clip(scene, camera, "full", clip_cache)
-        return cached_parse(client.segment(clip, concept).text, clip, concept)
+        return _capped(cached_parse(client.segment(clip, concept).text, clip, concept))
     tracks = []
     for half, offset in (("left", 0), ("right", RIGHT_HALF_ID_OFFSET)):
         clip = build_clip(scene, camera, half, clip_cache)
-        for t in cached_parse(client.segment(clip, concept).text, clip, concept):
+        for t in _capped(cached_parse(client.segment(clip, concept).text, clip, concept)):
             tracks.append(t.model_copy(update={"obj_id": t.obj_id + offset}))
     return tracks
 
