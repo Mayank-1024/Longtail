@@ -11,7 +11,7 @@ import yaml
 from pydantic import BaseModel, ConfigDict, Field
 
 CONFIG_PATH = Path(__file__).resolve().parents[2] / "configs" / "verify.yaml"
-# ASSUMPTION A-244: the post-freeze verifier (v2) is configs/verify_v2.yaml, chosen by LONGTAIL_VERIFIER=v2.
+# ASSUMPTION A-244: the second verifier (v2) is configs/verify_v2.yaml, chosen by LONGTAIL_VERIFIER=v2.
 # Its fields are optional and absent from verify.yaml, where None keeps v1's behaviour, so v1 results, its
 # thresholds hash (dumped without None fields) and the recorded demo reproduce exactly
 CONFIG_PATHS = {"v1": CONFIG_PATH, "v2": CONFIG_PATH.with_name("verify_v2.yaml")}

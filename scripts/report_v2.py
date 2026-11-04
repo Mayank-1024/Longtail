@@ -2,7 +2,7 @@
 
     PYTHONPATH=. uv run python scripts/report_v2.py
 
-Reads configuration (c) of the frozen v1 (results/) and of the post-freeze v2 (results_v2/) for each scene set
+Reads configuration (c) of v1 (results/) and of v2 (results_v2/) for each scene set
 and split under longtail/eval/runs/, and fails if a v2 result was not made with the v2 thresholds.
 """
 
@@ -47,8 +47,8 @@ def render() -> str:
             "",
             "| Verifier | Precision | Recall | P@10 | Catch rate | False rejection |",
             "|---|---|---|---|---|---|",
-            _row("v1 (frozen)", v1),
-            _row("v2 (post-freeze)", v2),
+            _row("v1 (before)", v1),
+            _row("v2 (real-data fixes)", v2),
             "",
         ]
     return "\n".join(out).rstrip()

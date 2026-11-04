@@ -6,7 +6,7 @@
 #SBATCH -t 04:00:00
 #SBATCH --array=0-101%40         # one task per usable PandaSet scene (A-233; 054 is left out, A-240)
 #SBATCH -o /scratch/%u/longtail/logs/%x-%A_%a.out
-# The post-freeze verifier (v2, A-244, docs/eval-report.md "v2 (post-freeze, pre-registered)"): configuration
+# The second verifier (v2, A-244, docs/eval-report.md "v2: the real-data fixes, pre-registered"): configuration
 # (c) only, all 25 queries, one scene per task, saved unscored in results_partial_v2/ (v1's results_partial/ is
 # left alone); score_v2.sbatch scores them. Replay only, no keys on the cluster (A-237).
 set -euo pipefail

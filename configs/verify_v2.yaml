@@ -1,5 +1,5 @@
-# Verification thresholds, post-freeze v2 (LONGTAIL_VERIFIER=v2, A-244): verify.yaml plus the four fixes of
-# docs/eval-report.md ("v2 (post-freeze, pre-registered)"). Everything else is identical to verify.yaml, and
+# Verification thresholds, v2 (LONGTAIL_VERIFIER=v2, A-244): verify.yaml plus the four fixes of
+# docs/eval-report.md ("v2: the real-data fixes, pre-registered"). Everything else is identical to verify.yaml, and
 # tests/test_verifier_v2.py checks that. Pre-registered at tag v2-prereg; not tuned on any evaluation result.
 # see A-58 (verify.yaml): every threshold lives here; the loader has no defaults in code
 

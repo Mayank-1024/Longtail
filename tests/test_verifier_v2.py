@@ -1,4 +1,4 @@
-"""The post-freeze verifier (v2, A-244 to A-248): v1 is unchanged; each fix does what was pre-registered."""
+"""The second verifier (v2, A-244 to A-248): v1 is unchanged; each fix does what was pre-registered."""
 
 from types import SimpleNamespace
 
@@ -19,7 +19,7 @@ from longtail.vision import track_source
 V1 = load_verify_config(CONFIG_PATHS["v1"])
 V2 = load_verify_config(CONFIG_PATHS["v2"])
 
-# The pre-registered changes (docs/eval-report.md, "v2 (post-freeze, pre-registered)"); nothing else differs.
+# The pre-registered changes (docs/eval-report.md, "v2: the real-data fixes"); nothing else differs.
 PREREGISTERED = {
     "association.min_eroded_px": 50,
     "association.thin_mask_unverifiable": True,
@@ -45,10 +45,10 @@ def test_v2_differs_from_v1_only_in_the_preregistered_fields():
     assert changed == PREREGISTERED
 
 
-def test_v1_is_the_default_and_keeps_the_frozen_thresholds_hash(monkeypatch):
+def test_v1_is_the_default_and_keeps_its_thresholds_hash(monkeypatch):
     monkeypatch.delenv("LONGTAIL_VERIFIER", raising=False)
     assert load_verify_config() == V1
-    # the hash recorded in every frozen v1 result (longtail/eval/runs/*/results/*.json)
+    # the hash recorded in every v1 result (longtail/eval/runs/*/results/*.json)
     assert ablation.thresholds_hash(V1, gt.load_gt_config()) == "aedd697d2cbb2e1d"
     assert ablation.thresholds_hash(V2, gt.load_gt_config()) != "aedd697d2cbb2e1d"
 
