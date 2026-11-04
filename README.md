@@ -2,7 +2,7 @@
 
 **Type a rare driving scenario in plain English. Get back the moments in hours of multi-camera logs that contain it, each one checked against LiDAR before you see it.**
 
-**▶ [Watch the 3-minute demo](https://youtu.be/rPDpJZ9Zk8o)** · [X thread](https://x.com/MBhadrasen/status/2117959523407421807) · [Run it yourself](#get-started)
+**▶ [Watch the 3-minute demo](https://youtu.be/rPDpJZ9Zk8o)** · [X thread](https://x.com/MBhadrasen/status/2117959523407421807) · [LinkedIn post](https://lnkd.in/p/gEi7T-B8) · [Run it yourself](#get-started)
 
 *Built during the [Meta Global AI Developer Hackathon](https://dev.meta.ai/events/global-hackathon) (Indie track, "Push the Frontier") by Mayank Bhadrasen and Chethan Gowda, with Muse Wonder, SAM 3.1 and Muse Spark Open.*
 
