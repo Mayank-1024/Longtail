@@ -2,7 +2,7 @@
 
 Perception and verification (C1 to C10). This copy on `main` is the source of truth (see `CLAUDE.md`). Last update: 2026-11-03.
 
-PandaSet is now on disk here (scenes 001, 005, 018 and 058, from `scripts/fetch_pandaset.py`), and the real-data checks that need no SAM output are done. Everything here runs in replay mode: I make no paid calls. The two checks that need SAM masks wait for Mayank's SAM cache for those scenes.
+PandaSet is now on disk here (scenes 001, 005, 018 and 058, from `scripts/fetch_pandaset.py`), and the real-data checks that need no SAM output are done. Everything here runs in replay mode: I make no paid calls. Mayank's SAM cache for those scenes arrived on Nov 3, and the two checks that needed it are done; they are below the plan's bars, and `docs/eval-report.md` gives the numbers and the known limitations.
 
 ## a. Status
 
@@ -11,13 +11,13 @@ PandaSet is now on disk here (scenes 001, 005, 018 and 058, from `scripts/fetch_
 | C1 Dataset adapter | Merged | [#2](https://github.com/Mayank-1024/longtail/pull/2); ego-frame fix [#20](https://github.com/Mayank-1024/longtail/pull/20) | Done. Real-data tests pass on the 4 scenes. The ego frame was 180 degrees off (A-25); Mayank found it on real data and fixed it in #20, which I checked. Scene 001 loads in 3.7 s and 3.6 s here against the plan's 5 s; Mayank measured about 10 s, and the cluster sets its own budget (`LONGTAIL_LOAD_BUDGET_S`). The test keeps 5 s, unmarked. Scene 054 is left out (A-240, broken camera timestamps). |
 | C2 Projection and sync | Merged | [#3](https://github.com/Mayank-1024/longtail/pull/3) | Done. Projection matches the devkit (`test_projection_real`). Six-camera overlays checked by eye on scenes 001 and 058 (day and night): points sit on building edges, poles, curbs and car bodies. One thing to watch: a thin band of near points 10 to 45 px above some close car roofs, probably the roof seen from the higher LiDAR (the overlay has no occlusion test), possibly a small calibration residual; static structure does not show it. 3 frames per scene are unsynced and marked so. |
 | C3 SAM 3.1 client | Merged (#21) | [#9](https://github.com/Mayank-1024/longtail/pull/9) via [#21](https://github.com/Mayank-1024/longtail/pull/21) | Running live on the cluster (Mayank). Concept-phrase test skipped: changing a phrase now means re-running SAM on every scene; recorded as a limitation. New: `scripts/sam_coverage.py` lists missing (scene, camera, concept) responses in a cache ([#23](https://github.com/Mayank-1024/longtail/pull/23)). |
-| C4 Mask to LiDAR | Merged | [#4](https://github.com/Mayank-1024/longtail/pull/4) | **Pending:** 17 of 20 real SAM masks correct by eye. Needs the SAM cache (section e); not here as of Nov 3 evening. |
-| C5 Tracks and ego path | Merged | [#5](https://github.com/Mayank-1024/longtail/pull/5) | **Pending:** a parked car under 0.3 m/s while the ego moves. Needs the SAM cache (section e). |
+| C4 Mask to LiDAR | Merged | [#4](https://github.com/Mayank-1024/longtail/pull/4) | Done, **below the plan's bar:** 12 of 20 real SAM masks correct by eye (plan: 17). 2 wrong clusters, 3 thin masks read as FAIL (A-50, A-46), 2 correctly UNVERIFIABLE, 1 unclear. Clip ids match Mayank's (24 of 24). |
+| C5 Tracks and ego path | Merged | [#5](https://github.com/Mayank-1024/longtail/pull/5) | Done, **below the plan's bar:** 34 parked cars; positions within 0.1 to 0.4 m of the labels, but C5's speed jitters (median under 0.3 m/s on 5 of 34). `stopped()` is never wrong on them but judges only 16% of steps (A-77). |
 | C6 Verifier | Merged | [#6](https://github.com/Mayank-1024/longtail/pull/6) | No separate real-data check; the evaluation exercises it. |
 | C7 Ground truth | Merged (#21) | [#10](https://github.com/Mayank-1024/longtail/pull/10) via #21 | Done on the 4 local scenes: 5 random positives checked by eye, 5 of 5 correct. Two notes for the report: the ground truth has no occlusion test (A-122), so some positives are hard to see (a night scene) and recall is a lower bound; a parked pickup counts as a truck (A-123). Mayank built the ground truth on all scenes. |
-| C8 Metrics, ablation, breaks | Merged (#21) | [#11](https://github.com/Mayank-1024/longtail/pull/11) via #21 | The evaluation run is Mayank's, on the cluster. Configurations (a) to (c) only: (d) is not run, since Glimmer was cut (A-213). `scripts/report_results.py` turns the results JSON into the report's tables (tested on the synthetic results); waiting on the results. |
+| C8 Metrics, ablation, breaks | Merged (#21) | [#11](https://github.com/Mayank-1024/longtail/pull/11) via #21 | The evaluation run is Mayank's, on the cluster. Configurations (a) to (c) only: (d) is not run, since Glimmer was cut (A-213). Held-out results on 102 scenes are on `main` (#26, Mayank), with the tables written by `scripts/report_results.py`. |
 | C9 Visualization export | Merged | [#7](https://github.com/Mayank-1024/longtail/pull/7) | **Pending:** an export on a real scene, for its size and time. |
-| C10 Fresh-clone test | Script and checklist ready; final run Nov 4 | [#25](https://github.com/Mayank-1024/longtail/pull/25) | `scripts/fresh_clone.sh` on a fresh clone of `main`: clone, `uv sync`, ruff, 302 synthetic tests and the real-data tests pass. gitleaks over the full history (all 27 branches): no leaks. Open gaps, in `docs/submission-checklist.md`: no `longtail demo` command and no replay cache for a clone; the repo is private; the README lacks the SAM acknowledgement (A-109); no `eval-freeze` or `eval-final` tags. |
+| C10 Fresh-clone test | Script and checklist ready; final run Nov 4 (to do) | [#25](https://github.com/Mayank-1024/longtail/pull/25) | `scripts/fresh_clone.sh` on a fresh clone of `main`: clone, `uv sync`, ruff, 302 synthetic tests and the real-data tests pass. gitleaks over the full history (all 27 branches): no leaks. Gaps as of #25, in `docs/submission-checklist.md`: no `longtail demo` command and no replay cache for a clone; the repo is private; the README lacks the SAM acknowledgement (A-109); no `eval-freeze` or `eval-final` tags. #26 added `longtail demo` with a fetchable replay cache (A-243) and the SAM acknowledgement; the Nov 4 run rechecks all of them. |
 
 Open failures, kept as strict expected failures and explained in `docs/eval-report.md`: C4's centroid sits about 0.3 m from a box's centre (LiDAR sees surfaces only), and C5 reads a parked car partly hidden by another car as moving for 1.2 s (C6 never lets it PASS `moving`).
 
@@ -26,11 +26,12 @@ Open failures, kept as strict expected failures and explained in `docs/eval-repo
 Agreed on 2026-11-03 (from my side):
 
 - **A-213:** Glimmer cut, so no configuration (d). The README and the video present (a) to (c) only.
+- **A-142:** 102 scenes are the headline; confirmed by both (#26).
 - **A-228:** 4 queries replaced on Nov 3 by the rule written down before counting.
 
 Waiting on Mayank:
 
-- **A-142 (both, proposed):** the evaluation runs on every usable PandaSet scene: 103 minus 054 (A-240), so 102. This supersedes the plan's 30 and the 30-scene index (29 after A-240). Headline numbers are over the 102; index-only results are secondary. Registered in `docs/assumptions.md` (still needs Mayank's agreement), with the limits in `docs/eval-report.md`: the held-out split is by query, not by scene; development tuning used the same scenes; phrases untuned; recall a lower bound (A-122).
+- **A-142:** confirmed by both in #26 (above). Earlier proposal text, kept for the record: the evaluation runs on every usable PandaSet scene: 103 minus 054 (A-240), so 102. This supersedes the plan's 30 and the 30-scene index (29 after A-240). Headline numbers are over the 102; index-only results are secondary. Registered in `docs/assumptions.md` (still needs Mayank's agreement), with the limits in `docs/eval-report.md`: the held-out split is by query, not by scene; development tuning used the same scenes; phrases untuned; recall a lower bound (A-122).
 - **#21 review comments:** none blocking (sweep-cache memory against `--mem=24G`, the track-cache temp file name, the spend cap with parallel workers, dropped streams that may be billed).
 
 The full register is `docs/assumptions.md`. The Oct 30 version of this file lists every assumption that touches Mayank's half.
@@ -118,13 +119,13 @@ uv run python -m longtail.eval.breaks --queries <file> --split heldout --replay
 
 ## d. How the open work merges
 
-1. Merged on 2026-11-03: #21 (`m/integration`, with Mayank's OK: C3, C7, C8 and his M1 to M8), #23 (`scripts/sam_coverage.py`) and #24 (A-142 and the eval-report notes). #9 and #14 were marked merged; #10 and #11 closed as superseded; Mayank's #15 to #19 are his to close.
+1. Merged on 2026-11-03: #21 (`m/integration`, with Mayank's OK: C3, C7, C8 and his M1 to M8), #23 (`scripts/sam_coverage.py`) and #24 (A-142 and the eval-report notes). #9 and #14 were marked merged; #10 and #11 closed as superseded; Mayank's #15 to #19 are his to close. Then #25 (C10 prep), #26 (Mayank: held-out results, `longtail demo`, README) and the docs PR with the Nov 3 real-data checks.
 2. #25 (C10): `scripts/fresh_clone.sh`, `scripts/report_results.py`, `docs/submission-checklist.md` and this status.
 3. If `docs/status-chethan.md` conflicts during a merge, keep `main`'s version.
 
 ## e. What I need, in priority order
 
-1. **The SAM cache for scenes 001, 005, 018 and 058**, for the C4 mask check and the C5 parked-car check: the 24 full-frame clip indexes and their 120 responses (6 cameras x 5 concepts), nothing else. Save this as `bundle.py` in the repo root on the machine that holds the cache and run `uv run python bundle.py`; it writes `sam-cache-4-scenes.tgz` (I unpack it into `~/longtail-data/`, then check that the clip ids I build locally match yours):
+1. Done (Nov 3). **The SAM cache for scenes 001, 005, 018 and 058**, for the C4 mask check and the C5 parked-car check: the 24 full-frame clip indexes and their 120 responses (6 cameras x 5 concepts), nothing else. Save this as `bundle.py` in the repo root on the machine that holds the cache and run `uv run python bundle.py`; it writes `sam-cache-4-scenes.tgz` (I unpack it into `~/longtail-data/`, then check that the clip ids I build locally match yours):
 
    ```python
    import importlib.util, json, tarfile
@@ -146,6 +147,6 @@ uv run python -m longtail.eval.breaks --queries <file> --split heldout --replay
    ```
 
 2. A coverage run over all 102 scenes before the evaluation, especially after the A-239 outage: `uv run python scripts/sam_coverage.py --cache cache --scenes-from data/pandaset` on the machine holding the cache (no images or key needed). It prints every missing (scene, camera, concept) and the scenes to re-run; exit status 1 on any gap. Full coverage is 102 x 6 x 5 = 3,060 responses.
-3. Agreement on A-142.
-4. The results directory of the held-out run (`longtail/eval/runs/all-heldout/results/`: `ablation_a.json`, `ablation_b.json`, `ablation_c.json`, `breaks.json`). Then `uv run python scripts/report_results.py <dir> --write docs/eval-report.md` fills in the tables.
-5. For C10 (Mayank's areas): a `longtail demo --replay` command (or the documented replay command it stands for) and a way for a fresh clone to get the replay cache; the repo made public; the SAM acknowledgement in the README.
+3. Done (#26). Agreement on A-142.
+4. Done (#26). The results directory of the held-out run (`longtail/eval/runs/all-heldout/results/`: `ablation_a.json`, `ablation_b.json`, `ablation_c.json`, `breaks.json`). Then `uv run python scripts/report_results.py <dir> --write docs/eval-report.md` fills in the tables.
+5. Partly done (#26: `longtail demo` and the SAM acknowledgement; the Nov 4 run checks them). For C10 (Mayank's areas): a `longtail demo --replay` command (or the documented replay command it stands for) and a way for a fresh clone to get the replay cache; the repo made public; the SAM acknowledgement in the README.

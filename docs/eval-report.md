@@ -25,9 +25,41 @@ The first real-data run found the ego frame 180 degrees off: forward was read as
 
 The plan's concept-phrase test (2 or 3 phrases per class on 3 development scenes, with the winners going into `configs/taxonomy.yaml`) was not run. Changing a phrase now would mean re-running SAM on every scene, so the phrases are the ones first written in the taxonomy. SAM's recall per class is not measured, and a class whose phrase SAM finds poorly loses recall in configurations (b) and (c). The 3 phrase-tuning scenes in the index were never used for tuning.
 
+### Real SAM output on 4 scenes (checks of Nov 3)
+
+Mayank's cached SAM responses for scenes 001, 005, 018 and 058 (6 cameras by 5 concepts, 120 responses), replayed with no paid calls. The 24 clip ids and clip indexes match the ones built here from the same PandaSet images (24 of 24 identical). All 120 responses parse. The checks of this section and of C4 and C5 below were made with scratch scripts outside the repository (no code changes); their images and per-item verdicts are kept with the checks, not committed.
+
+**SAM's 16-object cap is per response, not per frame.** No response has more than 16 distinct object ids, and 16 of the 63 non-empty responses have exactly 16. Once 16 objects are allocated, SAM adds no new ones for the rest of the clip, even objects that enter later and close: in scene 001's front-left camera, a labelled car 8 m away fills frame 60 and the "car" response returns nothing after frame 48. The plan describes the cap as 16 objects per frame, and A-110 marks a response truncated only when one frame returns 16 objects, so it marks 3 of the 16 capped responses; the other 13 are capped without being marked. A missed object lowers recall; it cannot make a finding pass.
+
+**Short responses are not cut off.** 21 of the 120 responses end before the clip's last frame. None is a broken stream: every response ends with a newline and a complete record. SAM writes a frame line only when it sees something (16 responses start after frame 0, and 6 of those that reach the last frame have gaps inside). Compared with the labels, the 21 split into:
+
+| Why the response ends early | Responses | Evidence |
+|---|---|---|
+| SAM's 16-object cap | 6 | All 16 object ids used, then nothing new while labelled cars stay in view (4 to 31 of the remaining frames) |
+| The objects left the view | 10 | No labelled object of the class in view after SAM's last frame |
+| Detection misses | 5 | Labelled objects still in view, but at night with motion blur (scene 058) or 42 to 58 m away |
+
+**Empty responses look genuine.** 57 of the 120 responses are empty. In 51 of them no labelled object of the class is in view. The other 6 are plausible misses: a USPS van labelled Medium-sized Truck, a pickup behind an SUV at night, small pedestrians at night, and a rider about 49 m away.
+
+**Every cyclist response is empty on these scenes** (24 of 24). In 22 of them no labelled rider is in view. The other 2 are in scene 018, with a rider about 49 m away, so the C7 positive `cyclist_hidden_by_car` there is missed. These 4 scenes cannot tell whether the phrase "cyclist" works at all; how often it finds anything over the 102 scenes is not measured.
+
 ## C4: mask to LiDAR association
 
-Everything below was measured on the synthetic scene (`tests/synthetic.py`), with the camera-side and LiDAR-side occlusion model on (A-43). The real-mask check (17 of 20 correct by eye) is still to do; see `tests/test_associate_real.py`.
+Everything below except the real-mask check was measured on the synthetic scene (`tests/synthetic.py`), with the camera-side and LiDAR-side occlusion model on (A-43).
+
+### Real masks: 12 of 20 correct (plan: at least 17)
+
+20 SAM masks from the 4 scenes above, chosen at random (seed 0, uniformly over the 525 tracks, then one frame with a mask), each associated alone and judged by eye: correct when the kept points lie on the masked object, not on the background, the ground or something in front. `tests/test_associate_real.py` stays skipped, since the check fails.
+
+| Outcome | Masks | What happened |
+|---|---|---|
+| Correct cluster | 12 | Pedestrians at 15 to 36 m, cars from 3 to 36 m (two at night), a bus; one correctly leaves out a pedestrian in front of the car |
+| Wrong cluster | 2 | The bus-shelter post in front of a car; only the top corner of a van 2 m away (0.2 by 0.2 by 0.6 m, too small for the car size prior) |
+| Unclear | 1 | 6 points at 107 m; beyond 60 m the verifier returns UNVERIFIABLE anyway |
+| No cluster, correctly UNVERIFIABLE | 2 | Coverage of 1 point in the box (a 3-pixel mask; a far car) |
+| No cluster, wrongly FAIL | 3 | Thin slivers of real, partly hidden objects (a person, two cars behind other cars). The 3 px erosion (A-50) leaves no LiDAR points inside the mask, and the verifier reads "no points with good coverage" as evidence against the object |
+
+Counting the unclear and both correct UNVERIFIABLE results in C4's favour still gives 15 of 20.
 
 ### Centroid check: the plan's 0.15 m does not hold against the box centre
 
@@ -106,6 +138,14 @@ Tried and dropped: registering each frame's points onto the previous frame's (tr
 - The crosser's speed is right as a track (median 1.50 m/s) but swings from 1.11 to 1.94 m/s step to step, as its visible faces change. The plan's "1.5 plus or minus 0.1" holds for the track's median, not for every step; C6's 1 s duration rule absorbs the swings.
 - A parked car partly hidden by the close-pass car still reads as moving for 1.2 s (`test_occluded_parked_car_during_close_pass`, a strict expected failure). Occlusion by a nearer object that itself slides across the view is not caught by the end tests.
 - A 1 s smoothing window (11) trims the spikes (close pass 1.87 m/s max, the occluded car 0.8 s) but was not adopted: the plan fixes 5, and the change belongs with C6 tuning on development queries.
+
+### Parked cars on real scenes: positions accurate, speeds jitter (plan: under 0.3 m/s)
+
+The 4 scenes above, replayed: SAM "car" tracks on all 6 cameras, associated (C4) and tracked (C5) as the verifier does. 34 tracks match a car labelled Parked (labels read only inside `eval_ground_truth()`; track centre within 2 m of the cuboid on at least half its samples), judged while the ego moves faster than 1 m/s.
+
+- **Positions are accurate.** On two tracks checked sample by sample, the box centre (A-68) is 0.1 to 0.4 m from the labelled centre on almost every sample.
+- **C5's speed does not meet the plan.** The plan asks that a parked car read under 0.3 m/s while the ego moves. The median per-step speed is under 0.3 m/s on only 5 of the 34; no track stays under it throughout. Frame-to-frame jitter of 0.2 to 0.4 m over 0.1 s still gives 1 to 3 m/s after the window-5 smoothing. A single sample from another object gives the large spikes (up to 155 m/s): in one track, one sample came from a moving car 9 m away.
+- **`stopped()` is never wrong but judges only 16% of steps.** The verifier's motion predicates use the net displacement over 1 s, with hysteresis, and drop any window that contains a position jump (A-77). Every step they judge on the 34 parked cars reads stopped (net speed 0.01 to 0.31 m/s), so no parked car is called moving. But only 221 of the 1,350 steps are judged: 1,050 contain a jump and 79 are on tracks shorter than 1 s. 17 of the 34 cars get no judged step, so a query about a stopped car returns UNVERIFIABLE on them.
 
 ### Ego path
 
@@ -210,6 +250,22 @@ Per finding (`longtail viz`), measured on the synthetic scene; the second row is
 | PandaSet-sized: 80 frames, 1920x1080, 76k points per sweep | 480 | 131.5 MB (274 kB) | 3.7 MB | 21 kB | 13.9 s |
 
 The bird's-eye file stays under its 5 MB budget (A-99) by thinning to about 2,700 points per frame at PandaSet size. The overlays dominate: six full-resolution cameras for every frame of an 8 s window is about 130 MB per finding, more with real photos. Downscaling overlays or exporting only the frames the web view shows would cut that; not done, since the plan fixes neither.
+
+## Overall: a conservative verifier
+
+The real-data checks above point the same way. Where the evidence is thin (a far object, a short or jumpy track, little LiDAR in the box), the verifier answers UNVERIFIABLE rather than guess: no parked car was called moving, and the far and low-coverage masks were left unjudged. So expect it to trade recall for precision. The held-out results below show that trade: adding the verifier raises precision from 0.088 to 0.20 and lowers recall from 0.28 to 0.20, with a false-rejection rate of 0.46. Precision rises, but stays low in absolute terms.
+
+It is not wrong-free. The one way it gives a confident wrong answer in these checks is thin masks of partly hidden objects, which come out FAIL instead of UNVERIFIABLE (3 of 20 masks). Its wrong clusters (2 of 20) put points on something in front of the object or on only a corner of it.
+
+### Known limitations, fixes after submission
+
+The thresholds and rules are frozen for the evaluation, so these are listed rather than changed.
+
+- **A-110: truncation is under-flagged.** SAM caps a response at 16 objects, not 16 per frame; A-110 marks 3 of the 16 capped responses. Fix: also mark a response truncated when it has 16 distinct object ids, and send crowded cameras as shorter clips or halves (A-118), which costs new SAM calls.
+- **A-50: the 3 px erosion empties thin masks.** Fix: erode less, or not at all, when the eroded mask would hold fewer than a few pixels or points.
+- **A-46: a thin mask with no points is read as FAIL.** A-46's wording says skipped frames become UNVERIFIABLE; the verifier follows the plan's C6 rule instead (good coverage with no object points is evidence against the object). Fix: treat `no_points` and `no_cluster` as UNVERIFIABLE when the eroded mask is small, and bring A-46's wording in line with the code.
+- **A-77: jump rejection drops most steps on real tracks** (1,050 of 1,350 on the parked cars). Fix: reject the single outlying sample (for example by a median test) instead of every 1 s window that contains a jump.
+- **The smoothing window (plan: 5 samples; quadratic fit, A-66) is too short for real jitter.** Fix: a longer window (11 trimmed the synthetic spikes, C5 above) or a robust fit, tuned on development queries.
 
 ## Limits of the evaluation
 
