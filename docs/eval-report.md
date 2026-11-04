@@ -41,7 +41,17 @@ Mayank's cached SAM responses for scenes 001, 005, 018 and 058 (6 cameras by 5 c
 
 **Empty responses look genuine.** 57 of the 120 responses are empty. In 51 of them no labelled object of the class is in view. The other 6 are plausible misses: a USPS van labelled Medium-sized Truck, a pickup behind an SUV at night, small pedestrians at night, and a rider about 49 m away.
 
-**Every cyclist response is empty on these scenes** (24 of 24). In 22 of them no labelled rider is in view. The other 2 are in scene 018, with a rider about 49 m away, so the C7 positive `cyclist_hidden_by_car` there is missed. These 4 scenes cannot tell whether the phrase "cyclist" works at all; how often it finds anything over the 102 scenes is not measured.
+**Every cyclist response is empty on these scenes** (24 of 24). In 22 of them no labelled rider is in view. The other 2 are in scene 018, with a rider about 49 m away, so the C7 positive `cyclist_hidden_by_car` there is missed. The emptiness was those 4 scenes, not the phrase: over the 102 scenes, the held-out cyclist queries do find cyclists. Recall (matched findings over ground-truth positives, A-134), with verification (c) and with SAM tracks alone (b):
+
+| Held-out query | (c) | (b) |
+|---|---|---|
+| `cyclist_within_15` | 11 of 14 | 7 of 14 |
+| `cyclist_ahead` | 10 of 22 | 7 of 22 |
+| `cyclist_near_moving_car` | 2 of 6 | 0 of 6 |
+| `cyclist_hidden_by_car` | 0 of 29 | 2 of 29 |
+| All 4 | 23 of 71 (0.32) | 16 of 71 (0.23) |
+
+On three of these queries (c) matches more than (b), so (c)'s findings are not a subset of (b)'s.
 
 ## C4: mask to LiDAR association
 
@@ -255,6 +265,10 @@ The bird's-eye file stays under its 5 MB budget (A-99) by thinning to about 2,70
 
 The real-data checks above point the same way. Where the evidence is thin (a far object, a short or jumpy track, little LiDAR in the box), the verifier answers UNVERIFIABLE rather than guess: no parked car was called moving, and the far and low-coverage masks were left unjudged. So expect it to trade recall for precision. The held-out results below show that trade: adding the verifier raises precision from 0.088 to 0.20 and lowers recall from 0.28 to 0.20, with a false-rejection rate of 0.46. Precision rises, but stays low in absolute terms.
 
+**The precision gain is not clearly significant.** The 95% intervals touch: (b) 0.088 [0.044, 0.134], (c) 0.20 [0.13, 0.29]. Over 15 held-out queries, the data are consistent with a smaller gain than the point values show.
+
+**The verifier separates false claims from true ones only weakly.** In (c) it rejects 59% of the claims the labels show are false (catch rate 0.59 [0.57, 0.60]), but also 46% of the claims the labels support (false-rejection rate 0.46 [0.44, 0.48]). On baseline (a)'s claims, each checked alone as a box, the two rates are 0.89 and 0.81: it rejects almost everything. A rejection is only somewhat more likely for a false claim than for a true one.
+
 It is not wrong-free. The one way it gives a confident wrong answer in these checks is thin masks of partly hidden objects, which come out FAIL instead of UNVERIFIABLE (3 of 20 masks). Its wrong clusters (2 of 20) put points on something in front of the object or on only a corner of it.
 
 ### Known limitations, fixes after submission
@@ -309,3 +323,5 @@ A break passes when it lowers precision, the catch rate or recall of (c); one th
 <!-- results:end -->
 
 Provenance: the per-scene runs were made at `65d9457` on Explorer; they were scored at `65d9457-dirty`, whose only changes are commit `c446597` (scoring reads the clean partials from the breaks entry point and memoises the label projections per frame; no metric changes, tests show the same outcomes). Secondary results over the 29 index scenes and the dev split are in `longtail/eval/runs/{index-heldout,index-dev,all-dev}/results/`; no break is a hole in any of them.
+
+Tags: `eval-freeze` and `eval-final` were both created on Nov 3 at 19:25 ET, after the run, not when the queries were frozen. They point at the right commits. `eval-freeze` is `e43cfa0` (Nov 3, 05:54), the last change to the queries (the A-228 replacements). `eval-final` is `f80a4d6`, the merge that committed these results. The results were made at `65d9457`, between the two: `e43cfa0` is an ancestor of `65d9457`, which is an ancestor of `f80a4d6`. The queries did not change from `eval-freeze` to `65d9457`, and the configs did not change from `65d9457` to `eval-final`.
