@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "./api";
 import { Detail } from "./components/Detail";
+import { Intro } from "./components/Intro";
 import { SkeletonRows, StepLoader } from "./components/Loader";
 import { Results } from "./components/Results";
 import { TraceView } from "./components/TraceView";
@@ -14,7 +15,18 @@ const EXAMPLES = [
   "a pedestrian partly hidden by a car",
 ];
 
+// Show the landing screen once per browser tab; a reload in the same tab goes straight to the app.
+function introSeen(): boolean {
+  try {
+    return new URLSearchParams(window.location.search).has("app") || sessionStorage.getItem("lt-entered") === "1";
+  } catch {
+    return false;
+  }
+}
+
 export function App() {
+  const [intro, setIntro] = useState(() => !introSeen());
+  const [entered, setEntered] = useState(false); // true once the intro hands over: plays the app's entrance
   const [mode, setMode] = useState<string>("");
   const [saved, setSaved] = useState<SearchListItem[]>([]);
   const [query, setQuery] = useState("");
@@ -62,10 +74,18 @@ export function App() {
     }
   };
 
+  const enter = () => {
+    try { sessionStorage.setItem("lt-entered", "1"); } catch { /* private window: show it again next time */ }
+    setIntro(false);
+    setEntered(true);
+  };
+
   return (
-    <div className="app">
+    <>
+    {intro && <Intro onEnter={enter} />}
+    <div className={`app${entered ? " app-enter" : ""}`} aria-hidden={intro || undefined}>
       <header>
-        <span className="logo">
+        <span className="logo" title="replay the intro" onClick={() => setIntro(true)}>
           <img src="/favicon.svg" alt="" width="22" height="22" />
           LongTail
         </span>
@@ -133,5 +153,6 @@ export function App() {
         </main>
       </div>
     </div>
+    </>
   );
 }
