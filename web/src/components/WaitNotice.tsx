@@ -1,16 +1,12 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef } from "react";
 import type { TraceEvent } from "../types";
+import { clock, Ring, Stages, useElapsed } from "./Loader";
 
 // 5 min a scene: measured on a laptop with 4 SAM workers (about 2.5 h over the 29 index scenes). Once a
 // scene has finished, the estimate uses the measured pace of this search instead.
 const MIN_PER_SCENE = 5;
 
 type SceneState = "pending" | "found" | "none" | "error";
-
-function clock(s: number): string {
-  const m = Math.floor(s / 60);
-  return m >= 60 ? `${Math.floor(m / 60)} h ${m % 60} min` : `${m}:${String(s % 60).padStart(2, "0")}`;
-}
 
 function eta(sec: number): string {
   if (sec < 60) return "under a minute left";
@@ -20,36 +16,12 @@ function eta(sec: number): string {
 
 const STAGES = ["Plan", "Pick scenes", "Track (SAM 3.1)", "Verify (LiDAR)", "Finish"] as const;
 
-function Ring({ done, total, spinning }: { done: number; total: number; spinning: boolean }) {
-  const r = 34;
-  const c = 2 * Math.PI * r;
-  const frac = total > 0 ? done / total : 0;
-  return (
-    <svg className="ring" viewBox="0 0 84 84" width="84" height="84" aria-hidden="true">
-      <circle cx="42" cy="42" r={r} className="ring-track" />
-      {spinning ? (
-        <circle cx="42" cy="42" r={r} className="ring-spin" strokeDasharray={`${c * 0.22} ${c}`} />
-      ) : (
-        <circle cx="42" cy="42" r={r} className="ring-fill" strokeDasharray={`${c * frac} ${c}`}
-          transform="rotate(-90 42 42)" />
-      )}
-      <text x="42" y="40" className="ring-num">{total > 0 ? `${done}/${total}` : "…"}</text>
-      <text x="42" y="55" className="ring-label">{total > 0 ? "scenes" : ""}</text>
-    </svg>
-  );
-}
-
 /** While a search runs: an animated loader with the stage, scenes verified and left, an estimate, and why. */
 export function WaitNotice({ events, startedAt }: { events: TraceEvent[]; startedAt: number }) {
-  const [now, setNow] = useState(Date.now());
+  const elapsed = useElapsed(startedAt);
   const seen = useRef<number[]>([]); // when each event arrived, for the measured pace
-  useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(t);
-  }, []);
   while (seen.current.length < events.length) seen.current.push(Date.now());
 
-  const elapsed = Math.max(0, Math.round((now - startedAt) / 1000));
   const order: string[] = [];
   let lastSearching = -1;
   let lastTracked = -1;
@@ -120,14 +92,7 @@ export function WaitNotice({ events, startedAt }: { events: TraceEvent[]; starte
           </div>
         </div>
       </div>
-      <ol className="stages">
-        {STAGES.map((s, i) => (
-          <li key={s} className={i < stage ? "st-done" : i === stage ? "st-now" : ""}>
-            <span className="st-dot" />
-            {s}
-          </li>
-        ))}
-      </ol>
+      <Stages names={STAGES} now={stage} />
       {total > 0 && (
         <div className="scene-grid">
           {order.map((s) => (
