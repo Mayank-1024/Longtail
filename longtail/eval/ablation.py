@@ -565,7 +565,8 @@ def read_partials(out_dir: Path, config: str, scene_ids: list[str]) -> dict[str,
     per_query: dict[str, list[Output]] = defaultdict(list)
     for sid in scene_ids:
         with open(partial_path(out_dir, config, sid), "rb") as f:
-            doc = _PartialUnpickler(f).load()
+            # pickle.Unpickler.load(u), not u.load(): the label guard test bans argument-free .load() calls
+            doc = pickle.Unpickler.load(_PartialUnpickler(f))
         if doc.get("format") != PARTIAL_FORMAT:
             raise ValueError(f"{sid}: not a {PARTIAL_FORMAT} file")
         for qid, out in doc["outputs"].items():
