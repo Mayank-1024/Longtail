@@ -35,10 +35,10 @@ export function Intro({ onEnter }: { onEnter: () => void }) {
   };
 
   useEffect(() => {
-    const t = setTimeout(() => btn.current?.focus({ preventScroll: true }), 1800);
+    // Enter or Space anywhere enters, so the button needs no auto-focus (its focus ring would show on screen)
     const k = (e: KeyboardEvent) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); enter(); } };
     window.addEventListener("keydown", k);
-    return () => { clearTimeout(t); window.removeEventListener("keydown", k); };
+    return () => window.removeEventListener("keydown", k);
   });
 
   return (
