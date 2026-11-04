@@ -31,7 +31,7 @@ export function TraceView({ events, running }: { events: TraceEvent[]; running?:
   return (
     <div className="trace">
       <ol>
-        {events.map((e, i) => (
+        {events.filter((e) => e.name !== "tracked" && e.name !== "scene_done").map((e, i) => (
           <li key={i} className={`trace-${e.kind}`}>
             <span className="trace-step">{e.step}</span>
             <span className="trace-kind">{e.kind}</span>
