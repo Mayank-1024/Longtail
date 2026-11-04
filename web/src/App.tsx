@@ -133,7 +133,7 @@ export function App() {
           {live !== null && (
             <div>
               <h2>searching…</h2>
-              <WaitNotice events={live} startedAt={startedAt} />
+              <WaitNotice events={live} startedAt={startedAt} mode={mode} />
               <TraceView events={live} running />
             </div>
           )}
