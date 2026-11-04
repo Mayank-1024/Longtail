@@ -1,0 +1,312 @@
+{
+ "format": "longtail.ablation/v1",
+ "config": "b",
+ "description": "+ SAM 3.1 tracks of the named classes",
+ "commit": "65d94579418143235d4d07ba5f02d3678dcce367",
+ "thresholds_hash": "aedd697d2cbb2e1d",
+ "gt_config_hash": "30b2595120f63c6a",
+ "split": "dev",
+ "scenes": [
+  "005",
+  "006",
+  "008",
+  "011",
+  "012",
+  "013",
+  "014",
+  "015",
+  "016",
+  "017",
+  "018",
+  "019",
+  "020",
+  "021",
+  "023",
+  "041",
+  "048",
+  "050",
+  "058",
+  "059",
+  "062",
+  "063",
+  "074",
+  "079",
+  "103",
+  "109",
+  "117",
+  "124",
+  "158"
+ ],
+ "bootstrap": {
+  "resamples": 1000,
+  "seed": 20261103,
+  "over": "queries"
+ },
+ "metrics": {
+  "precision": {
+   "value": 0.09591836734693877,
+   "ci95": [
+    0.028239797774059796,
+    0.17256615990990992
+   ]
+  },
+  "recall": {
+   "value": 0.3381294964028777,
+   "ci95": [
+    0.24356060606060606,
+    0.4630050505050505
+   ]
+  },
+  "p_at_10": {
+   "value": 0.13999999999999999,
+   "ci95": [
+    0.04,
+    0.26024999999999976
+   ]
+  },
+  "returned_top10": {
+   "value": 10.0,
+   "ci95": [
+    10.0,
+    10.0
+   ]
+  },
+  "cost_per_query_usd": {
+   "value": 3.0624000000000016,
+   "ci95": [
+    2.7840000000000016,
+    3.619200000000002
+   ]
+  },
+  "seconds_per_query": {
+   "value": 26.50386316606309,
+   "ci95": [
+    23.194658677971457,
+    32.287313195618914
+   ]
+  },
+  "catch_rate": {
+   "value": null,
+   "ci95": null
+  },
+  "false_rejection_rate": {
+   "value": null,
+   "ci95": null
+  },
+  "hallucination_rate": {
+   "value": 0.07975243621070667,
+   "ci95": [
+    0.06764336962273709,
+    0.09930244615167083
+   ]
+  },
+  "queries": 10,
+  "queries_with_no_output": 0,
+  "positives": 139,
+  "claims_false": 32769,
+  "claims_true": 378115
+ },
+ "queries": [
+  {
+   "query_id": "bus_ahead_30",
+   "positives": 7,
+   "returned": 28,
+   "matched": 3,
+   "precision": 0.10714285714285714,
+   "p_at_10": 0.3,
+   "returned_top10": 10,
+   "cost_usd": 2.784,
+   "seconds": 23.034,
+   "claims_false": 511,
+   "claims_true": 2803,
+   "claims_false_checked": 0,
+   "claims_false_caught": 0,
+   "claims_true_checked": 0,
+   "claims_true_rejected": 0,
+   "windows": 203,
+   "claims": 3314,
+   "hallucinated_claims": 511
+  },
+  {
+   "query_id": "ped_within_5",
+   "positives": 5,
+   "returned": 61,
+   "matched": 0,
+   "precision": 0.0,
+   "p_at_10": 0.0,
+   "returned_top10": 10,
+   "cost_usd": 2.784,
+   "seconds": 24.04,
+   "claims_false": 3978,
+   "claims_true": 37010,
+   "claims_false_checked": 0,
+   "claims_false_caught": 0,
+   "claims_true_checked": 0,
+   "claims_true_rejected": 0,
+   "windows": 203,
+   "claims": 40988,
+   "hallucinated_claims": 3978
+  },
+  {
+   "query_id": "car_behind_10",
+   "positives": 50,
+   "returned": 54,
+   "matched": 14,
+   "precision": 0.25925925925925924,
+   "p_at_10": 0.6,
+   "returned_top10": 10,
+   "cost_usd": 2.784,
+   "seconds": 25.534,
+   "claims_false": 4028,
+   "claims_true": 75814,
+   "claims_false_checked": 0,
+   "claims_false_caught": 0,
+   "claims_true_checked": 0,
+   "claims_true_rejected": 0,
+   "windows": 203,
+   "claims": 79842,
+   "hallucinated_claims": 4028
+  },
+  {
+   "query_id": "ped_crossing_ego_moving",
+   "positives": 1,
+   "returned": 61,
+   "matched": 0,
+   "precision": 0.0,
+   "p_at_10": 0.0,
+   "returned_top10": 10,
+   "cost_usd": 2.784,
+   "seconds": 22.584,
+   "claims_false": 3978,
+   "claims_true": 37010,
+   "claims_false_checked": 0,
+   "claims_false_caught": 0,
+   "claims_true_checked": 0,
+   "claims_true_rejected": 0,
+   "windows": 203,
+   "claims": 40988,
+   "hallucinated_claims": 3978
+  },
+  {
+   "query_id": "cyclist_moving_ego_moving",
+   "positives": 16,
+   "returned": 25,
+   "matched": 4,
+   "precision": 0.16,
+   "p_at_10": 0.3,
+   "returned_top10": 10,
+   "cost_usd": 2.784,
+   "seconds": 21.788,
+   "claims_false": 167,
+   "claims_true": 812,
+   "claims_false_checked": 0,
+   "claims_false_caught": 0,
+   "claims_true_checked": 0,
+   "claims_true_rejected": 0,
+   "windows": 203,
+   "claims": 979,
+   "hallucinated_claims": 167
+  },
+  {
+   "query_id": "ped_walking_ego_moving",
+   "positives": 29,
+   "returned": 61,
+   "matched": 16,
+   "precision": 0.26229508196721313,
+   "p_at_10": 0.1,
+   "returned_top10": 10,
+   "cost_usd": 2.784,
+   "seconds": 24.013,
+   "claims_false": 3978,
+   "claims_true": 37010,
+   "claims_false_checked": 0,
+   "claims_false_caught": 0,
+   "claims_true_checked": 0,
+   "claims_true_rejected": 0,
+   "windows": 203,
+   "claims": 40988,
+   "hallucinated_claims": 3978
+  },
+  {
+   "query_id": "ped_walking_ego_stopped",
+   "positives": 1,
+   "returned": 61,
+   "matched": 1,
+   "precision": 0.01639344262295082,
+   "p_at_10": 0.0,
+   "returned_top10": 10,
+   "cost_usd": 2.784,
+   "seconds": 24.499,
+   "claims_false": 3978,
+   "claims_true": 37010,
+   "claims_false_checked": 0,
+   "claims_false_caught": 0,
+   "claims_true_checked": 0,
+   "claims_true_rejected": 0,
+   "windows": 203,
+   "claims": 40988,
+   "hallucinated_claims": 3978
+  },
+  {
+   "query_id": "two_peds_within_2",
+   "positives": 28,
+   "returned": 53,
+   "matched": 9,
+   "precision": 0.16981132075471697,
+   "p_at_10": 0.1,
+   "returned_top10": 10,
+   "cost_usd": 2.784,
+   "seconds": 25.719,
+   "claims_false": 3978,
+   "claims_true": 37010,
+   "claims_false_checked": 0,
+   "claims_false_caught": 0,
+   "claims_true_checked": 0,
+   "claims_true_rejected": 0,
+   "windows": 203,
+   "claims": 40988,
+   "hallucinated_claims": 3978
+  },
+  {
+   "query_id": "cyclist_hidden_by_truck",
+   "positives": 1,
+   "returned": 25,
+   "matched": 0,
+   "precision": 0.0,
+   "p_at_10": 0.0,
+   "returned_top10": 10,
+   "cost_usd": 2.784,
+   "seconds": 22.613,
+   "claims_false": 167,
+   "claims_true": 812,
+   "claims_false_checked": 0,
+   "claims_false_caught": 0,
+   "claims_true_checked": 0,
+   "claims_true_rejected": 0,
+   "windows": 203,
+   "claims": 979,
+   "hallucinated_claims": 167
+  },
+  {
+   "query_id": "ped_crossing_car_stopped_right",
+   "positives": 1,
+   "returned": 61,
+   "matched": 0,
+   "precision": 0.0,
+   "p_at_10": 0.0,
+   "returned_top10": 10,
+   "cost_usd": 5.568,
+   "seconds": 51.214,
+   "claims_false": 8006,
+   "claims_true": 112824,
+   "claims_false_checked": 0,
+   "claims_false_caught": 0,
+   "claims_true_checked": 0,
+   "claims_true_rejected": 0,
+   "windows": 203,
+   "claims": 120830,
+   "hallucinated_claims": 8006
+  }
+ ],
+ "created_utc": "2026-11-03T23:30:03+00:00"
+}

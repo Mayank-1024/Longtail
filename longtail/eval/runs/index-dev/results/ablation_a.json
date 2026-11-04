@@ -1,0 +1,308 @@
+{
+ "format": "longtail.ablation/v1",
+ "config": "a",
+ "description": "Spark Open alone (describe then match)",
+ "commit": "65d94579418143235d4d07ba5f02d3678dcce367",
+ "thresholds_hash": "aedd697d2cbb2e1d",
+ "gt_config_hash": "30b2595120f63c6a",
+ "split": "dev",
+ "scenes": [
+  "005",
+  "006",
+  "008",
+  "011",
+  "012",
+  "013",
+  "014",
+  "015",
+  "016",
+  "017",
+  "018",
+  "019",
+  "020",
+  "021",
+  "023",
+  "041",
+  "048",
+  "050",
+  "058",
+  "059",
+  "062",
+  "063",
+  "074",
+  "079",
+  "103",
+  "109",
+  "117",
+  "124",
+  "158"
+ ],
+ "bootstrap": {
+  "resamples": 1000,
+  "seed": 20261103,
+  "over": "queries"
+ },
+ "metrics": {
+  "precision": {
+   "value": 0.0,
+   "ci95": [
+    0.0,
+    0.0
+   ]
+  },
+  "recall": {
+   "value": 0.0,
+   "ci95": [
+    0.0,
+    0.0
+   ]
+  },
+  "p_at_10": {
+   "value": 0.0,
+   "ci95": [
+    0.0,
+    0.0
+   ]
+  },
+  "returned_top10": {
+   "value": 6.8,
+   "ci95": [
+    4.2,
+    9.3
+   ]
+  },
+  "cost_per_query_usd": {
+   "value": 0.1558849,
+   "ci95": [
+    0.15379645,
+    0.15812956999999997
+   ]
+  },
+  "seconds_per_query": {
+   "value": 6.991200000000001,
+   "ci95": [
+    6.089589999999999,
+    7.8833425
+   ]
+  },
+  "catch_rate": {
+   "value": 0.9868421052631579,
+   "ci95": [
+    0.9708720147402735,
+    1.0
+   ]
+  },
+  "false_rejection_rate": {
+   "value": 1.0,
+   "ci95": [
+    1.0,
+    1.0
+   ]
+  },
+  "hallucination_rate": {
+   "value": 0.9620253164556962,
+   "ci95": [
+    0.9162555128568849,
+    1.0
+   ]
+  },
+  "queries": 10,
+  "queries_with_no_output": 2,
+  "positives": 139,
+  "claims_false": 152,
+  "claims_true": 6
+ },
+ "queries": [
+  {
+   "query_id": "bus_ahead_30",
+   "positives": 7,
+   "returned": 9,
+   "matched": 0,
+   "precision": 0.0,
+   "p_at_10": 0.0,
+   "returned_top10": 9,
+   "cost_usd": 0.152121,
+   "seconds": 4.513,
+   "claims_false": 9,
+   "claims_true": 0,
+   "claims_false_checked": 9,
+   "claims_false_caught": 9,
+   "claims_true_checked": 0,
+   "claims_true_rejected": 0,
+   "claims": 9,
+   "hallucinated_claims": 9
+  },
+  {
+   "query_id": "ped_within_5",
+   "positives": 5,
+   "returned": 23,
+   "matched": 0,
+   "precision": 0.0,
+   "p_at_10": 0.0,
+   "returned_top10": 10,
+   "cost_usd": 0.160107,
+   "seconds": 8.664,
+   "claims_false": 23,
+   "claims_true": 0,
+   "claims_false_checked": 23,
+   "claims_false_caught": 23,
+   "claims_true_checked": 0,
+   "claims_true_rejected": 0,
+   "claims": 23,
+   "hallucinated_claims": 23
+  },
+  {
+   "query_id": "car_behind_10",
+   "positives": 50,
+   "returned": 41,
+   "matched": 0,
+   "precision": 0.0,
+   "p_at_10": 0.0,
+   "returned_top10": 10,
+   "cost_usd": 0.162202,
+   "seconds": 8.078,
+   "claims_false": 36,
+   "claims_true": 5,
+   "claims_false_checked": 36,
+   "claims_false_caught": 36,
+   "claims_true_checked": 5,
+   "claims_true_rejected": 5,
+   "claims": 41,
+   "hallucinated_claims": 36
+  },
+  {
+   "query_id": "ped_crossing_ego_moving",
+   "positives": 1,
+   "returned": 0,
+   "matched": 0,
+   "precision": null,
+   "p_at_10": 0.0,
+   "returned_top10": 0,
+   "cost_usd": 0.155724,
+   "seconds": 6.357,
+   "claims_false": 0,
+   "claims_true": 0,
+   "claims_false_checked": 0,
+   "claims_false_caught": 0,
+   "claims_true_checked": 0,
+   "claims_true_rejected": 0,
+   "claims": 0,
+   "hallucinated_claims": 0
+  },
+  {
+   "query_id": "cyclist_moving_ego_moving",
+   "positives": 16,
+   "returned": 6,
+   "matched": 0,
+   "precision": 0.0,
+   "p_at_10": 0.0,
+   "returned_top10": 6,
+   "cost_usd": 0.153691,
+   "seconds": 6.545,
+   "claims_false": 6,
+   "claims_true": 0,
+   "claims_false_checked": 6,
+   "claims_false_caught": 6,
+   "claims_true_checked": 0,
+   "claims_true_rejected": 0,
+   "claims": 6,
+   "hallucinated_claims": 6
+  },
+  {
+   "query_id": "ped_walking_ego_moving",
+   "positives": 29,
+   "returned": 19,
+   "matched": 0,
+   "precision": 0.0,
+   "p_at_10": 0.0,
+   "returned_top10": 10,
+   "cost_usd": 0.156708,
+   "seconds": 7.703,
+   "claims_false": 19,
+   "claims_true": 0,
+   "claims_false_checked": 19,
+   "claims_false_caught": 19,
+   "claims_true_checked": 0,
+   "claims_true_rejected": 0,
+   "claims": 19,
+   "hallucinated_claims": 19
+  },
+  {
+   "query_id": "ped_walking_ego_stopped",
+   "positives": 1,
+   "returned": 20,
+   "matched": 0,
+   "precision": 0.0,
+   "p_at_10": 0.0,
+   "returned_top10": 10,
+   "cost_usd": 0.155667,
+   "seconds": 8.852,
+   "claims_false": 20,
+   "claims_true": 0,
+   "claims_false_checked": 20,
+   "claims_false_caught": 19,
+   "claims_true_checked": 0,
+   "claims_true_rejected": 0,
+   "claims": 20,
+   "hallucinated_claims": 20
+  },
+  {
+   "query_id": "two_peds_within_2",
+   "positives": 28,
+   "returned": 17,
+   "matched": 0,
+   "precision": 0.0,
+   "p_at_10": 0.0,
+   "returned_top10": 10,
+   "cost_usd": 0.159337,
+   "seconds": 7.996,
+   "claims_false": 34,
+   "claims_true": 0,
+   "claims_false_checked": 34,
+   "claims_false_caught": 33,
+   "claims_true_checked": 0,
+   "claims_true_rejected": 0,
+   "claims": 34,
+   "hallucinated_claims": 34
+  },
+  {
+   "query_id": "cyclist_hidden_by_truck",
+   "positives": 1,
+   "returned": 0,
+   "matched": 0,
+   "precision": null,
+   "p_at_10": 0.0,
+   "returned_top10": 0,
+   "cost_usd": 0.150847,
+   "seconds": 5.012,
+   "claims_false": 0,
+   "claims_true": 0,
+   "claims_false_checked": 0,
+   "claims_false_caught": 0,
+   "claims_true_checked": 0,
+   "claims_true_rejected": 0,
+   "claims": 0,
+   "hallucinated_claims": 0
+  },
+  {
+   "query_id": "ped_crossing_car_stopped_right",
+   "positives": 1,
+   "returned": 3,
+   "matched": 0,
+   "precision": 0.0,
+   "p_at_10": 0.0,
+   "returned_top10": 3,
+   "cost_usd": 0.152445,
+   "seconds": 6.192,
+   "claims_false": 5,
+   "claims_true": 1,
+   "claims_false_checked": 5,
+   "claims_false_caught": 5,
+   "claims_true_checked": 1,
+   "claims_true_rejected": 1,
+   "claims": 6,
+   "hallucinated_claims": 5
+  }
+ ],
+ "created_utc": "2026-11-03T21:37:57+00:00"
+}
