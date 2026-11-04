@@ -27,7 +27,7 @@ UNPACK_ROOTS = ("cache", "runs")
 DEMO_CACHE_URL = (
     "https://github.com/Mayank-1024/longtail/releases/download/demo-cache-v1/longtail-demo-cache.tgz"
 )
-DEMO_CACHE_SHA256 = ""  # set when the asset is published (scripts/pack_demo_cache.py prints it)
+DEMO_CACHE_SHA256 = "41244f09e94ada417f59ba2c8e0b8d841b888b879cca0ffed64c38a97155ebc1"
 HERO_QUERY = "a pedestrian partly hidden by a car"
 
 
