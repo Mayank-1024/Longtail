@@ -108,7 +108,8 @@ if (cd "$DIR/repo" && clean uv run --no-sync longtail demo --help) >"$LOG/demo_h
 print(sum((r() / x['scene_id'] / 'camera').is_dir() for x in s), 'of', len(s))" 2>/dev/null)
   record INFO "index scenes on disk" "${on_disk:-unknown} (the demo search needs all of them)"
   run "demo --fetch-cache" demo_fetch.log "${TIMEOUT[@]}" "$DEMO_TIMEOUT_S" uv run --no-sync longtail demo --fetch-cache
-  run "demo --replay --query" demo.log "${TIMEOUT[@]}" "$DEMO_TIMEOUT_S" uv run --no-sync longtail demo --replay --query
+  # --list reads the recorded search from the cache; --replay --query would rerun the verification (about 2.5 h)
+  run "demo --list" demo.log "${TIMEOUT[@]}" "$DEMO_TIMEOUT_S" uv run --no-sync longtail demo --list
   if [ -d "$DIR/repo/web/dist" ]; then
     record INFO "demo web view" "web/dist present: start it with longtail demo --replay"
   else

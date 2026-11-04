@@ -96,11 +96,11 @@ uv sync && (cd web && npm install && npm run build)
 S=$(uv run python -c "from longtail.data.index import load_index; print(','.join(s['scene_id'] for s in load_index()['scenes']))")
 uv run python scripts/fetch_pandaset.py --parts full --scenes $S   # the 29 index scenes, about 13 GB
 uv run longtail demo --fetch-cache                               # the recorded run's cache (GitHub release asset)
-uv run longtail demo --replay --query                            # the hero search, headless
+uv run longtail demo --list                                      # the recorded search and its verified findings
 uv run longtail demo --replay                                    # the web view on http://127.0.0.1:8000
 ```
 
-The first replay rebuilds the clip videos from the camera images (ffmpeg, a few minutes); every model and SAM call is then served from the cache, and a miss is an error, never a charge. The LiDAR verification is not cached: it runs again locally, about 5 to 6 minutes a scene with 4 workers, so the hero search over the 29 index scenes takes about 2.5 hours on a laptop.
+The first replay rebuilds the clip videos from the camera images (ffmpeg, a few minutes); every model and SAM call is then served from the cache, and a miss is an error, never a charge. The web view opens the recorded search at once (its six-camera and bird's-eye views are rebuilt from the images on first view). A new search in replay, or `longtail demo --replay --query` to rerun the hero search headless, runs the LiDAR verification again locally: about 5 to 6 minutes a scene with 4 workers, so about 2.5 hours over the 29 index scenes on a laptop.
 
 `LONGTAIL_MODE=replay` serves every model call from the cache, so a recorded demo replays exactly with no key. `LONGTAIL_MODE=offline-demo` runs the web view on synthetic scenes with a scripted model, for development only; it shows a banner and is never used for results or footage.
 
