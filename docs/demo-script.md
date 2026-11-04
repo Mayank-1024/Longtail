@@ -31,7 +31,7 @@ Three minutes, captions burned in, plus a 30 to 45 s cut for X. Narration in May
 
 Numbers: held-out split, 15 queries, 102 PandaSet scenes (A-142), from `docs/eval-report.md`. Read at an even pace; each block matches a shot above.
 
-**0:00-0:15 (the catch).** "This vision model says there's a pedestrian here. The LiDAR says this box is empty. LongTail rejects the claim, and that's the point: on our held-out queries, 96 percent of what a vision model claimed on its own was false."
+**0:00-0:15 (the catch).** "This vision model says there's a pedestrian here. The LiDAR finds no object in this box. LongTail rejects the claim, and that's the point: on our held-out queries, 96 percent of what a vision model claimed on its own was false."
 
 **0:15-0:35 (the problem).** "Self-driving teams need the rare moments: a pedestrian half hidden by a car, a cyclist cutting in. They're buried in hours of logs, and a vision model alone says yes far too easily. LongTail finds them from one sentence, and proves each one before showing it."
 
@@ -39,6 +39,6 @@ Numbers: held-out split, 15 queries, 102 PandaSet scenes (A-142), from `docs/eva
 
 **1:35-2:15 (the evidence).** "We measured it against PandaSet's human labels, on queries we never tuned on. Spark Open alone found no correct events. Adding SAM tracks found 28 percent of them, at 9 percent precision. Adding the LiDAR check raises precision to 20 percent and catches 59 percent of the false claims that are left. It costs us: recall drops to 20 percent, the verifier wrongly rejects 46 percent of true claims, and over 15 queries the precision gain isn't clearly significant. We report all of that, with 95 percent intervals. We also broke the system on purpose: verifier off, calibration shifted, LiDAR out of sync. Every break made the numbers worse, so the evaluation can tell."
 
-**2:15-2:40 (the models).** "Three Meta models do the work: Muse Wonder plans and runs the search, SAM 3.1 tracks, and Muse Spark Open writes the cards. Every paid call we made, the whole 102-scene evaluation included, cost about 68 dollars."
+**2:15-2:40 (the models).** "Three Meta models do the work. Muse Wonder plans and runs the search. SAM 3.1 tracks. And Muse Spark Open writes the cards. Every paid call we made, the whole 102-scene evaluation included, cost about 68 dollars."
 
-**2:40-3:00 (close).** "Everything here was built during the hackathon: the commits are public, every assumption is written down, and the evaluation reruns from one command. LongTail: find the long tail, and prove it."
+**2:40-3:00 (close).** "Everything here was built during the hackathon: the commits are public, every assumption is written down, and every number traces back to a script in the repo. LongTail: find the long tail, and prove it."
