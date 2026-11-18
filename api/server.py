@@ -19,10 +19,19 @@ Endpoints:
   POST /api/searches/{sid}/reviews {finding_id, decision, note}
   GET  /api/searches/{sid}/export?format=json|csv approved findings
   /files/...                                      everything under the runs directory (overlays, bev.json)
+
+Limits (A-253), all from the environment:
+  LONGTAIL_API_MAX_SEARCHES  searches running at once (default 2); one more gets 429 "busy"
+  LONGTAIL_API_JOB_TTL_S     a finished job's status and trace are kept this long (default 3600 s), then
+                             dropped; at most MAX_KEPT_JOBS finished jobs are kept in any case
+  LONGTAIL_API_TOKEN         unset (the default, the local demo): no check. Set: every POST (the requests
+                             that spend money or write state) needs the header "Authorization: Bearer <token>"
+                             or "X-LongTail-Token: <token>"; the web view sends it when opened as /?token=...
 """
 
 import asyncio
 import csv
+import hmac
 import io
 import json
 import os
@@ -34,7 +43,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -53,6 +62,10 @@ Mode = Literal["live", "replay", "offline-demo"]
 AgentFactory = Callable[[Callable[[TraceEvent], None]], SearchAgent]
 GATED = (PaidCallsDisabled, NoKeyError, ReplayMissError, BudgetExceeded)
 WEB_DIST = Path(__file__).resolve().parents[1] / "web" / "dist"
+# ASSUMPTION A-253: at most 2 searches at once, finished jobs kept 1 h (and at most 200), no token by default
+DEFAULT_MAX_SEARCHES = 2
+DEFAULT_JOB_TTL_S = 3600.0
+MAX_KEPT_JOBS = 200
 
 
 class SearchRequest(BaseModel):
@@ -74,6 +87,7 @@ class Job:
     search_id: str | None = None
     error: str | None = None
     lock: threading.Lock = field(default_factory=threading.Lock)
+    finished_at: float | None = None
 
 
 def _event_json(e: TraceEvent) -> dict[str, Any]:
@@ -86,11 +100,45 @@ def create_app(
     open_scene: SceneOpener,
     mode: Mode,
     card_client: Callable[[], Any] | None = None,
+    *,
+    max_searches: int = DEFAULT_MAX_SEARCHES,
+    job_ttl_s: float = DEFAULT_JOB_TTL_S,
+    token: str | None = None,
+    clock: Callable[[], float] = time.time,
 ) -> FastAPI:
     run_root = Path(run_root)
     run_root.mkdir(parents=True, exist_ok=True)
     app = FastAPI(title="LongTail", version="0.1")
     jobs: dict[str, Job] = {}
+    jobs_lock = threading.Lock()
+    slots = threading.BoundedSemaphore(max(1, max_searches))
+
+    def require_token(
+        authorization: str | None = Header(default=None), x_longtail_token: str | None = Header(default=None)
+    ) -> None:
+        """Off unless a token is configured; then every POST must carry it."""
+        if not token:
+            return
+        given = x_longtail_token or ""
+        if authorization and authorization.lower().startswith("bearer "):
+            given = authorization[7:].strip()
+        if not hmac.compare_digest(given.encode(), token.encode()):
+            raise HTTPException(401, "a valid API token is required")
+
+    guarded = [Depends(require_token)]
+
+    def prune_jobs() -> None:
+        """Drop finished jobs past their time to live, and the oldest beyond MAX_KEPT_JOBS (caller locks)."""
+        now = clock()
+        finished = sorted(
+            (j for j in jobs.values() if j.finished_at is not None), key=lambda j: j.finished_at or 0.0
+        )
+        for j in finished:
+            if now - (j.finished_at or now) > job_ttl_s:
+                jobs.pop(j.job_id, None)
+        finished = [j for j in finished if j.job_id in jobs]
+        for j in finished[: max(0, len(finished) - MAX_KEPT_JOBS)]:
+            jobs.pop(j.job_id, None)
 
     def search_dir(sid: str) -> Path:
         d = (run_root / sid).resolve()
@@ -144,10 +192,18 @@ def create_app(
             )
         return out
 
-    @app.post("/api/searches")
+    @app.post("/api/searches", dependencies=guarded)
     def start_search(req: SearchRequest) -> dict[str, Any]:
+        if not slots.acquire(blocking=False):
+            raise HTTPException(
+                429,
+                f"busy: {max(1, max_searches)} searches are already running; try again shortly",
+                headers={"Retry-After": "30"},
+            )
         job = Job(uuid.uuid4().hex[:12], req.query)
-        jobs[job.job_id] = job
+        with jobs_lock:
+            prune_jobs()
+            jobs[job.job_id] = job
 
         def on_event(e: TraceEvent) -> None:
             with job.lock:
@@ -160,14 +216,26 @@ def create_app(
                 job.status = "done"
             except Exception as e:  # reported to the client; the server keeps running
                 job.error, job.status = f"{type(e).__name__}: {e}", "error"
+            finally:
+                job.finished_at = clock()
+                slots.release()
 
-        threading.Thread(target=work, daemon=True).start()
+        try:
+            threading.Thread(target=work, daemon=True).start()
+        except BaseException:
+            slots.release()
+            with jobs_lock:
+                jobs.pop(job.job_id, None)
+            raise
         return {"job_id": job.job_id, "mode": mode}
 
     def get_job(job_id: str) -> Job:
-        if job_id not in jobs:
-            raise HTTPException(404, f"no job {job_id}")
-        return jobs[job_id]
+        with jobs_lock:
+            prune_jobs()
+            job = jobs.get(job_id)
+        if job is None:
+            raise HTTPException(404, f"no job {job_id} (unknown, or finished and expired)")
+        return job
 
     @app.get("/api/jobs/{job_id}")
     def job_status(job_id: str) -> dict[str, Any]:
@@ -252,7 +320,7 @@ def create_app(
             "mode": mode,
         }
 
-    @app.post("/api/searches/{sid}/findings/{fid}/card")
+    @app.post("/api/searches/{sid}/findings/{fid}/card", dependencies=guarded)
     def write_card(sid: str, fid: str) -> dict[str, Any]:
         search = load_search(sid)
         f = find(search, fid)
@@ -269,7 +337,7 @@ def create_app(
         cp.write_text(json.dumps(out, indent=1))
         return out
 
-    @app.post("/api/searches/{sid}/reviews")
+    @app.post("/api/searches/{sid}/reviews", dependencies=guarded)
     def review(sid: str, req: ReviewRequest) -> dict[str, Any]:
         search = load_search(sid)
         f = find(search, req.finding_id)
@@ -337,10 +405,19 @@ def create_app(
     return app
 
 
+def _limits_from_env() -> dict[str, Any]:
+    return {
+        "max_searches": int(os.environ.get("LONGTAIL_API_MAX_SEARCHES") or DEFAULT_MAX_SEARCHES),
+        "job_ttl_s": float(os.environ.get("LONGTAIL_API_JOB_TTL_S") or DEFAULT_JOB_TTL_S),
+        "token": os.environ.get("LONGTAIL_API_TOKEN") or None,
+    }
+
+
 def create_app_from_env() -> FastAPI:
     load_dotenv()
     mode: Mode = os.environ.get("LONGTAIL_MODE", "replay")  # type: ignore[assignment]
     run_root = Path(os.environ.get("LONGTAIL_RUNS", "runs"))
+    limits = _limits_from_env()
     if mode == "offline-demo":
         from api.demo import demo_client, demo_scenes
 
@@ -352,7 +429,7 @@ def create_app_from_env() -> FastAPI:
         def factory(on_event):
             return SearchAgent(client, ids, opener, source, run_root, on_event=on_event)
 
-        return create_app(run_root, factory, opener, mode)
+        return create_app(run_root, factory, opener, mode, **limits)
     if mode == "replay":
         os.environ["LONGTAIL_REPLAY"] = "1"
     from longtail.data.index import load_index, open_scene
@@ -377,4 +454,4 @@ def create_app_from_env() -> FastAPI:
     def open_by_id(scene_id: str) -> Scene:
         return open_scene(scene_id)
 
-    return create_app(run_root, live_factory, open_by_id, mode, card_client=spark_open_client)
+    return create_app(run_root, live_factory, open_by_id, mode, card_client=spark_open_client, **limits)

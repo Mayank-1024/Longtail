@@ -262,6 +262,9 @@ Live mode makes real, paid calls: Muse Wonder and SAM 3.1 on the Meta Model API,
 | `LONGTAIL_VERIFIER` | `v1` | `v2` selects the pre-registered real-data fixes |
 | `LONGTAIL_SAM_WORKERS` | `6` | Parallel SAM cache warming |
 | `LONGTAIL_RESUME` | off | `1` loads a scene already verified for the same spec from `runs/` (`longtail demo` sets it) |
+| `LONGTAIL_API_MAX_SEARCHES` | `2` | Searches the web server runs at once; one more gets HTTP 429 (busy) |
+| `LONGTAIL_API_JOB_TTL_S` | `3600` | How long the web server keeps a finished search's job status and trace |
+| `LONGTAIL_API_TOKEN` | unset | If set, every POST to the web server needs it (`Authorization: Bearer <token>`); open the web view as `/?token=<token>`. Unset for the local demo |
 
 **Data:** PandaSet comes from its Hugging Face mirror, fetched by HTTP range request straight into `$LONGTAIL_DATA_DIR/pandaset/`, so there's no 44.5 GB zip to download first.
 - `uv run python scripts/fetch_pandaset.py --parts labels` fetches the labels for all 103 scenes (0.12 GB).

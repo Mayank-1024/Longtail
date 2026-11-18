@@ -123,3 +123,81 @@ def test_paths_outside_searches_are_refused(api):
     c, _ = api
     assert c.get("/api/searches/..%2F..%2Fetc").status_code == 404
     assert c.get("/api/searches/search-nope").status_code == 404
+
+
+# Limits (A-253): a bounded number of searches, finished jobs expire, an optional token on every POST.
+
+
+class _Blocked:
+    """An agent whose search waits until released, so a test controls how many are running."""
+
+    def __init__(self, gate) -> None:
+        self.gate = gate
+
+    def search(self, query):
+        self.gate.wait(10)
+
+        class R:
+            search_id = "search-none"
+
+        return R()
+
+
+def _limited_app(tmp_path, **kw):
+    import threading
+
+    gate = threading.Event()
+    now = [1000.0]
+    app = create_app(
+        tmp_path / "runs",
+        lambda on_event: _Blocked(gate),
+        lambda sid: None,
+        "offline-demo",
+        clock=lambda: now[0],
+        **kw,
+    )
+    return TestClient(app), gate, now
+
+
+def test_a_search_over_the_limit_gets_busy_and_a_slot_frees_when_one_ends(tmp_path):
+    c, gate, _ = _limited_app(tmp_path, max_searches=1)
+    first = c.post("/api/searches", json={"query": "a bus"})
+    assert first.status_code == 200
+    busy = c.post("/api/searches", json={"query": "a bus"})
+    assert busy.status_code == 429 and "busy" in busy.json()["detail"] and busy.headers["retry-after"]
+    gate.set()
+    wait(c, first.json()["job_id"], timeout=10)
+    assert c.post("/api/searches", json={"query": "a bus"}).status_code == 200
+
+
+def test_finished_jobs_expire(tmp_path):
+    c, gate, now = _limited_app(tmp_path, job_ttl_s=60)
+    gate.set()
+    job = c.post("/api/searches", json={"query": "a bus"}).json()["job_id"]
+    assert wait(c, job, timeout=10)["status"] == "done"
+    now[0] += 30
+    assert c.get(f"/api/jobs/{job}").status_code == 200  # still within its time to live
+    now[0] += 31
+    assert c.get(f"/api/jobs/{job}").status_code == 404
+
+
+def test_the_token_is_off_by_default_and_guards_every_post_when_set(tmp_path):
+    c, gate, _ = _limited_app(tmp_path, token="s3cret")
+    gate.set()
+    assert c.get("/api/health").status_code == 200 and c.get("/api/searches").status_code == 200
+    assert c.post("/api/searches", json={"query": "a bus"}).status_code == 401
+    bad = {"Authorization": "Bearer nope"}
+    assert c.post("/api/searches", json={"query": "a bus"}, headers=bad).status_code == 401
+    assert (
+        c.post("/api/searches/search-x/reviews", json={"finding_id": "f", "decision": "reject"}).status_code
+        == 401
+    )
+    assert c.post("/api/searches/search-x/findings/f/card").status_code == 401
+    ok = c.post("/api/searches", json={"query": "a bus"}, headers={"Authorization": "Bearer s3cret"})
+    assert ok.status_code == 200
+    alt = c.post("/api/searches", json={"query": "a bus"}, headers={"X-LongTail-Token": "s3cret"})
+    assert alt.status_code in (200, 429)  # authorised; it may find the earlier search still running
+    # with no token configured, a POST needs nothing (the default local demo)
+    open_c, open_gate, _ = _limited_app(tmp_path / "open")
+    open_gate.set()
+    assert open_c.post("/api/searches", json={"query": "a bus"}).status_code == 200
