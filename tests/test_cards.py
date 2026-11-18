@@ -228,3 +228,91 @@ def test_baseten_reasoning_cutoff_is_empty_text_and_counted():
     assert out["output"][0]["content"][0]["text"] == ""
     assert out["usage"] == {"input_tokens": 156, "output_tokens": 20, "reasoning_tokens": 20}
     assert out["finish_reason"] == "length"
+
+
+# Regression tests for four sentences the old validator let through (review of main at 0d23707). A pedestrian
+# with 42 LiDAR points (exists PASS) that the occlusion check did not confirm (occluded_by FAIL).
+OCC_SPEC = ScenarioSpec.model_validate(
+    {
+        "query": "a pedestrian partly hidden by a car",
+        "actors": [{"id": "a1", "cls": "pedestrian", "sam_prompt": "person"}],
+        "predicates": [
+            {"name": "exists", "actors": ["a1"], "args": {}},
+            {"name": "occluded_by", "actors": ["a1"], "args": {"cls": "car"}},
+        ],
+        "assumptions": [],
+        "clarification": None,
+    }
+)
+
+
+def _occ_finding():
+    from longtail.contracts import Finding, PredicateResult
+
+    ok = PredicateResult(
+        result_id="r1",
+        name="exists",
+        actors={"a1": "t1"},
+        status="PASS",
+        value=42.0,
+        threshold=">= 10 points",
+        evidence={"margin": 32.0, "reason": "ok", "example": {"range_m": 8.3, "n_points": 42}},
+    )
+    bad = PredicateResult(
+        result_id="r2",
+        name="occluded_by",
+        actors={"a1": "t1"},
+        status="FAIL",
+        value=0.1,
+        threshold=">= 30% of the target's amodal box",
+        evidence={"margin": -0.2, "reason": "not_occluded", "example": {"covered_frac": 0.1}},
+    )
+    return Finding(
+        finding_id="f1",
+        scene_id="021",
+        t0=0.0,
+        t1=4.0,
+        spec_hash="x",
+        bindings={"a1": "t1"},
+        results=[ok, bad],
+        score=0.5,
+        cost_usd=0.0,
+    )
+
+
+def _errors(text, cites):
+    return validate_card(Card("Pedestrian behind a car", [Sentence(text, cites)]), _occ_finding(), OCC_SPEC)
+
+
+def test_a_fail_claim_cited_only_to_a_pass_result_is_rejected():
+    errors = _errors("The pedestrian is partly hidden behind a parked car.", ["r1"])
+    assert any("claims occluded_by but does not cite its result" in e for e in errors)
+    # citing the FAIL result instead still needs the hedge
+    assert any("as fact" in e for e in _errors("The pedestrian is partly hidden by a car.", ["r2"]))
+    assert _errors("The pedestrian could not be verified as hidden by a car.", ["r2"]) == []
+
+
+def test_a_hedge_about_something_else_does_not_cover_a_fail_result():
+    errors = _errors("The pedestrian is hidden by the car, which did not move.", ["r2"])
+    assert any("occluded_by (FAIL) as fact" in e for e in errors)
+    assert any("claims moving, which the verifier did not check" in e for e in errors)
+    assert _errors("The occlusion check failed for this pedestrian.", ["r2"]) == []
+
+
+def test_numbers_written_as_words_are_checked():
+    assert any("number 9 s" in e for e in _errors("The pedestrian was seen for about nine seconds.", ["r1"]))
+    assert any("number 42 m" in e for e in _errors("The pedestrian is forty-two metres away.", ["r1"]))
+    assert _errors("LiDAR found forty-two points on the pedestrian.", ["r1"]) == []
+    assert _errors("The window lasts four seconds.", ["r1"]) == []
+
+
+def test_a_number_in_the_wrong_unit_is_rejected():
+    assert any("number 42 m" in e for e in _errors("The pedestrian is 42 m away.", ["r1"]))
+    assert _errors("LiDAR found 42 points on the pedestrian, 8.3 m away.", ["r1"]) == []
+    assert any("number 10%" in e for e in _errors("About 10% of the pedestrian was covered.", ["r1"]))
+    assert _errors("A car covered 10% of the pedestrian, which failed the 30% bar.", ["r2"]) == []
+
+
+def test_template_cards_pass_the_hardened_validator():
+    f = _occ_finding()
+    assert validate_card(template_card(f, OCC_SPEC), f, OCC_SPEC) == []
