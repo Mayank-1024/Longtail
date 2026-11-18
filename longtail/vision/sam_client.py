@@ -16,9 +16,13 @@ import time
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 
+from longtail.llm.ledger import Ledger as _SpendLedger
 from longtail.vision.clips import Clip, cache_root
+
+if TYPE_CHECKING:
+    from longtail.llm.client import Budget
 
 SAM_MODEL = "sam-3.1"
 # Plan 3: $0.20 per 1,000 frames, 50-frame minimum per request.
@@ -66,24 +70,14 @@ def billed_usd(frames: int) -> float:
     return max(frames, MIN_BILLED_FRAMES) * USD_PER_FRAME
 
 
-class Ledger:
-    """Append-only JSON lines of every model call: model, frames, dollars, cache hit, latency."""
+class Ledger(_SpendLedger):
+    """Append-only JSON lines of every model call: model, frames, dollars, cache hit, latency.
+
+    The M1 ledger itself (default path LONGTAIL_LEDGER, A-234), so SAM lines take the same file lock and
+    reserve and settle against the same spend cap as every other call (A-249).
+    """
 
     # ASSUMPTION A-116: ledger lines go to runs/ledger.jsonl, the file the plan gives M1's client
-    def __init__(self, path: Path | None = None) -> None:
-        from longtail.llm.ledger import ledger_path  # A-234: LONGTAIL_LEDGER
-
-        self.path = Path(path) if path is not None else ledger_path()
-
-    def record(self, **entry: object) -> None:
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        with open(self.path, "a") as f:
-            f.write(json.dumps({"logged_at": time.time(), **entry}) + "\n")
-
-    def entries(self) -> list[dict]:
-        if not self.path.is_file():
-            return []
-        return [json.loads(line) for line in self.path.read_text().splitlines() if line.strip()]
 
 
 @dataclass(frozen=True)
@@ -166,8 +160,12 @@ class SamClient:
         raw = json.dumps([SAM_MODEL, clip.index.clip_id, concept, self.include_confidence])
         return hashlib.sha256(raw.encode()).hexdigest()[:32]
 
-    def segment(self, clip: Clip, concept: str) -> SamCall:
-        """One streamed request for one concept on one clip, served from the cache when possible."""
+    def segment(self, clip: Clip, concept: str, budget: "Budget | None" = None) -> SamCall:
+        """One streamed request for one concept on one clip, served from the cache when possible.
+
+        A paid request is reserved against the query budget (if given) and the spend cap before it is sent,
+        and settled at its billed cost after (A-250); a cache hit costs nothing and needs no budget.
+        """
         frames = len(clip.index.frames)
         cached = self.cache_dir / "responses" / f"{self._key(clip, concept)}.txt"
         common = {
@@ -187,25 +185,49 @@ class SamClient:
                 f"replay: no cached SAM response for {clip.index.scene_id}/{clip.index.camera} "
                 f"concept {concept!r} (clip {clip.index.clip_id}); expected {cached}"
             )
-        file_id = self.file_id(clip)
         transport = self._transport()
-        start = time.perf_counter()
-
-        def run() -> str:
-            return "".join(
-                transport.stream(
-                    model=SAM_MODEL,
-                    file_id=file_id,
-                    concept=concept,
-                    include_confidence=self.include_confidence,
-                )
-            )
-
-        text, attempts = self._with_retries(run)
         usd = billed_usd(frames)
+        # ASSUMPTION A-250: a paid SAM call holds its billed cost against the query budget and the spend cap
+        # until it settles; a failed call releases both
+        if budget is not None:
+            budget.reserve(usd)
+        hold = None
+        try:
+            reserve = getattr(transport, "reserve", None)  # GatedTransport: paid-call gate and spend cap
+            hold = reserve(usd, self.ledger) if reserve is not None else None
+            file_id = self.file_id(clip)
+            extra = {"reservation": hold} if hold is not None else {}
+            start = time.perf_counter()
+
+            def run() -> str:
+                return "".join(
+                    transport.stream(
+                        model=SAM_MODEL,
+                        file_id=file_id,
+                        concept=concept,
+                        include_confidence=self.include_confidence,
+                        **extra,
+                    )
+                )
+
+            text, attempts = self._with_retries(run)
+        except BaseException:
+            self.ledger.release(hold)
+            if budget is not None:
+                budget.release(usd)
+            raise
         _atomic_write(cached, str(text))
         latency = time.perf_counter() - start
-        self.ledger.record(**common, usd=usd, cache_hit=False, latency_s=round(latency, 3), attempts=attempts)
+        self.ledger.record(
+            **common,
+            usd=usd,
+            cache_hit=False,
+            latency_s=round(latency, 3),
+            attempts=attempts,
+            reservation=hold,
+        )
+        if budget is not None:
+            budget.settle(usd, usd)
         return SamCall(str(text), clip.index.clip_id, concept, frames, usd, False, attempts)
 
 
@@ -267,30 +289,48 @@ SAM_CALL_ESTIMATE_USD = billed_usd(80)
 
 
 class GatedTransport:
-    """The real transport behind LONGTAIL_ALLOW_PAID=1 and LONGTAIL_SPEND_CAP_USD, like every M1 call."""
+    """The real transport behind LONGTAIL_ALLOW_PAID=1 and LONGTAIL_SPEND_CAP_USD, like every M1 call.
+
+    SamClient reserves each call's cost against the cap first (`reserve`, A-249) and passes the reservation
+    to `stream`; a direct `stream` call without one is checked against the cap, counting open reservations.
+    """
 
     def __init__(self, inner: SamTransport, ledger_path: Path | None = None) -> None:
         self.inner, self.ledger_path = inner, ledger_path
 
-    def _check(self, estimate: float) -> None:
-        from longtail.llm.client import DEFAULT_SPEND_CAP_USD, BudgetExceeded, PaidCallsDisabled
-        from longtail.llm.ledger import Ledger as SpendLedger
+    def _gate(self) -> float:
+        """Raise unless paid calls are on; return the spend cap."""
+        from longtail.llm.client import DEFAULT_SPEND_CAP_USD, PaidCallsDisabled
 
         if os.environ.get("LONGTAIL_ALLOW_PAID") != "1":
             raise PaidCallsDisabled("paid calls are off: set LONGTAIL_ALLOW_PAID=1 (or use replay)")
-        cap = float(os.environ.get("LONGTAIL_SPEND_CAP_USD") or DEFAULT_SPEND_CAP_USD)
-        spent = SpendLedger(self.ledger_path).total_usd()
+        return float(os.environ.get("LONGTAIL_SPEND_CAP_USD") or DEFAULT_SPEND_CAP_USD)
+
+    def _check(self, estimate: float) -> None:
+        from longtail.llm.client import BudgetExceeded
+
+        cap = self._gate()
+        ledger = _SpendLedger(self.ledger_path)
+        spent = ledger.total_usd() + ledger.reserved_usd()
         if spent + estimate > cap:
             raise BudgetExceeded(
                 f"SAM call of ${estimate:.4f} would pass the spend cap (${spent:.4f} of ${cap:.2f})"
             )
 
+    def reserve(self, usd: float, ledger: _SpendLedger | None = None) -> str:
+        """The gate, then usd held against the cap in one locked step; returns the reservation id."""
+        cap = self._gate()
+        return (ledger or _SpendLedger(self.ledger_path)).reserve(usd, cap)
+
     def upload(self, path: Path) -> str:
         self._check(0.0)
         return self.inner.upload(path)
 
-    def stream(self, **kwargs) -> Iterator[str]:
-        self._check(SAM_CALL_ESTIMATE_USD)
+    def stream(self, *, reservation: str | None = None, **kwargs) -> Iterator[str]:
+        if reservation is None:
+            self._check(SAM_CALL_ESTIMATE_USD)
+        else:
+            self._gate()
         return self.inner.stream(**kwargs)
 
 

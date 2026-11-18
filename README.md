@@ -244,7 +244,8 @@ Live mode makes real, paid calls: Muse Wonder and SAM 3.1 on the Meta Model API,
 **What it costs.**
 - SAM 3.1 is listed at $0.016 per 80-frame camera clip ($0.20 per 1,000 frames).
 - At list price with nothing cached, a query over all 102 scenes is about $12.50. In practice it's much less, because the agent searches fewer scenes and responses are cached and shared across queries.
-- `LONGTAIL_QUERY_BUDGET_USD` caps each query's model calls, and `LONGTAIL_SPEND_CAP_USD` is a hard cap over everything in `runs/ledger.jsonl`. A call that would cross either cap is refused.
+- `LONGTAIL_QUERY_BUDGET_USD` caps what one search spends on all its paid calls: the planner, the agent and SAM 3.1. `LONGTAIL_SPEND_CAP_USD` is a hard cap over everything in `runs/ledger.jsonl`. Each paid call reserves its estimate against both before it's sent and settles at its real cost after, so concurrent calls can't all pass the same check. A call that would cross either cap is refused.
+- The default budget of $0.75 covers about 46 uncached camera clips, which is 2 to 7 scenes depending on how many object types the query names. Raise it for a wider live search. A scene that runs over the budget shows an error, and the agent finishes with what it found.
 - Verification runs on your machine and takes about 5 to 6 minutes a scene with 4 workers.
 
 ### Configuration
@@ -254,7 +255,7 @@ Live mode makes real, paid calls: Muse Wonder and SAM 3.1 on the Meta Model API,
 | `LONGTAIL_MODE` | `replay` (web server) | `live`, `replay` (every call from the cache) or `offline-demo` (synthetic scenes and a scripted model, for development only; shows a banner) |
 | `LONGTAIL_ALLOW_PAID` | `0` | `1` allows real, paid calls |
 | `LONGTAIL_SPEND_CAP_USD` | `5` | Hard cap over the ledger |
-| `LONGTAIL_QUERY_BUDGET_USD` | `0.75` | Model-call budget per query |
+| `LONGTAIL_QUERY_BUDGET_USD` | `0.75` | Budget per search for every paid call (planner, agent, SAM 3.1) |
 | `LONGTAIL_REPLAY` | `0` | `1` serves every model call from the cache and fails on a miss |
 | `LONGTAIL_DATA_DIR` | `./data` | Where PandaSet lives (`$LONGTAIL_DATA_DIR/pandaset/`) |
 | `LONGTAIL_CACHE_DIR` | `cache` | Model responses, SAM responses, parsed tracks, clips |
@@ -277,7 +278,7 @@ The 30-scene index (`longtail/data/index.json`) is committed.
 ## Honesty rules we hold ourselves to
 
 - **No labels in the pipeline.** A label guard raises outside `eval_ground_truth()`, and a test enforces where that context may be used.
-- **One gate for paid calls.** Every paid call goes through one client with a cache, a ledger, a per-query budget, a spend cap, and a gate that's off by default.
+- **One gate for paid calls.** Every paid call goes through one of two clients: the model client (`longtail/llm/client.py`) for Muse Wonder and Muse Spark Open, or the SAM 3.1 client (`longtail/vision/sam_client.py`). Both have a response cache and share one paid-call gate that's off by default, one ledger and one spend cap. A search charges every paid call it makes, SAM included, to its per-query budget.
 - **Every assumption written down.** Every choice the plan didn't fix is in [docs/assumptions.md](docs/assumptions.md), tagged in the code and checked by a test (`tests/test_assumptions.py`).
 - **Nothing staged.** We never stage a hallucination for the video: the demo replays a real recorded run, call for call.
 - **Changes registered before results.** v2's changes and the rule for which version leads were tagged before v2 was run, and both versions are reported.
