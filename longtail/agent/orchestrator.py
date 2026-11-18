@@ -13,6 +13,7 @@ finish automatically with every verified finding found so far, so a search alway
 import json
 import os
 import time
+import uuid
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -291,7 +292,9 @@ class SearchAgent:
         if dropped:
             self._log(trace, TraceEvent(len(trace), "stop", "finish_dropped", {"finding_ids": dropped}))
         rejected = sorted((f for f in found.values() if not f.verified), key=lambda f: -f.score)
-        search_id = f"search-{spec_run_id(spec)}"
+        # ASSUMPTION A-251: a search id is the spec hash plus a random suffix, so two searches with one spec
+        # never share search.json or reviews.jsonl; the per-scene verify runs stay keyed by the spec (reused)
+        search_id = f"search-{spec_run_id(spec)}-{uuid.uuid4().hex[:8]}"
         run_dirs = {sid: scene_run_dir(spec, sid, Path(".")).as_posix() for sid in searched}
         result = SearchResult(
             query,
