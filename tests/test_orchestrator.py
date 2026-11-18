@@ -177,3 +177,26 @@ def test_clarification_stops_before_any_search(tmp_path, scenes):
     result = agent_for(tmp_path, t, scenes).search("a car running a red light", Budget(5.0))
     assert result.stop_reason == "clarification" and result.spec.clarification == "Which light state?"
     assert result.scenes_searched == [] and len(t.requests) == 1
+
+
+def test_two_searches_with_the_same_spec_get_their_own_ids_and_share_the_scene_runs(tmp_path, scenes):
+    def script():
+        return Scripted(
+            [
+                planner_step,
+                lambda r: [fc("search_scenes", {"scene_ids": ["crossing"]}, "s1")],
+                lambda r: [fc("finish", {"finding_ids": [], "summary": "done"}, "f1")],
+            ]
+        )
+
+    first = agent_for(tmp_path, script(), scenes).search(QUERY, Budget(5.0))
+    (tmp_path / "runs" / first.search_id / "reviews.jsonl").write_text('{"finding_id": "x"}\n')
+    second = agent_for(tmp_path, script(), scenes).search(QUERY, Budget(5.0))
+    assert first.spec == second.spec and first.search_id != second.search_id
+    assert first.search_id.startswith("search-") and second.search_id.startswith("search-")
+    for r in (first, second):
+        saved = json.loads((tmp_path / "runs" / r.search_id / "search.json").read_text())
+        assert saved["search_id"] == r.search_id
+    # the new search starts with no reviews; the per-scene verify run is the same directory (reused)
+    assert not (tmp_path / "runs" / second.search_id / "reviews.jsonl").exists()
+    assert first.run_dirs == second.run_dirs

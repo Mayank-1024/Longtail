@@ -5,7 +5,10 @@ Paid calls are off by default. A request reaches the network only when all of th
   2. a transport exists (MODEL_API_KEY is set),
   3. the response is not already cached and replay mode is off,
   4. the estimated cost fits the per-query budget and the spend cap (LONGTAIL_SPEND_CAP_USD).
-Otherwise the client raises before anything is sent, so nothing can be charged by accident.
+Otherwise the client raises before anything is sent, so nothing can be charged by accident. The estimate is
+reserved against both limits before the call and settled at the real cost after it (A-249), so concurrent
+calls cannot all pass the same check. SAM 3.1 calls (vision/sam_client.py) reserve against the same ledger,
+cap and per-query budget (A-250).
 
 Calls:
   respond(request)      non-streamed /v1/responses call (planner, cards); returns the output items and text
@@ -14,6 +17,7 @@ Calls:
 """
 
 import os
+import threading
 import time
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
@@ -21,7 +25,7 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from longtail.llm.cache import ResponseCache, file_digest, request_key
-from longtail.llm.ledger import Ledger
+from longtail.llm.ledger import BudgetExceeded, Ledger
 
 BASE_URL = "https://api.meta.ai/v1"
 
@@ -64,10 +68,6 @@ class ReplayMissError(LookupError):
     """Replay mode was asked for a response that is not in the cache."""
 
 
-class BudgetExceeded(RuntimeError):
-    """The estimated cost does not fit the per-query budget or the spend cap."""
-
-
 class Transport(Protocol):
     def upload(self, path: Path) -> str:
         """Upload a file; return its file id."""
@@ -81,10 +81,13 @@ class Transport(Protocol):
 
 @dataclass
 class Budget:
-    """A per-query spending limit (plan: LONGTAIL_QUERY_BUDGET_USD, $0.75)."""
+    """A per-query spending limit (plan: LONGTAIL_QUERY_BUDGET_USD, $0.75), shared by the planner, the agent
+    and the SAM calls of one search (A-250). Thread-safe: reserve before a call, settle or release after."""
 
     limit_usd: float
     spent_usd: float = 0.0
+    reserved_usd: float = 0.0
+    _lock: threading.Lock = field(default_factory=threading.Lock, repr=False, compare=False)
 
     @classmethod
     def from_env(cls) -> "Budget":
@@ -92,7 +95,26 @@ class Budget:
 
     @property
     def remaining_usd(self) -> float:
-        return self.limit_usd - self.spent_usd
+        return self.limit_usd - self.spent_usd - self.reserved_usd
+
+    def reserve(self, usd: float) -> None:
+        """Hold usd for a call about to be made; raise BudgetExceeded, holding nothing, if it won't fit."""
+        with self._lock:
+            left = self.limit_usd - self.spent_usd - self.reserved_usd
+            if usd > left:
+                raise BudgetExceeded(f"estimated ${usd:.4f} exceeds the query budget (${left:.4f} left)")
+            self.reserved_usd += usd
+
+    def settle(self, reserved: float, usd: float) -> None:
+        """Turn a reservation into the call's real cost."""
+        with self._lock:
+            self.reserved_usd = max(0.0, self.reserved_usd - reserved)
+            self.spent_usd += usd
+
+    def release(self, reserved: float) -> None:
+        """Drop a reservation whose call was never charged."""
+        with self._lock:
+            self.reserved_usd = max(0.0, self.reserved_usd - reserved)
 
 
 @dataclass(frozen=True)
@@ -181,17 +203,28 @@ class ModelClient:
             raise NoKeyError("MODEL_API_KEY is not set")
         return self.transport
 
-    def _check_budget(self, estimate: float, budget: Budget | None) -> None:
-        spent = self.ledger.total_usd()
-        if spent + estimate > self.spend_cap_usd:
-            raise BudgetExceeded(
-                f"estimated ${estimate:.4f} would pass the spend cap "
-                f"(${spent:.4f} of ${self.spend_cap_usd:.2f} used)"
-            )
-        if budget is not None and estimate > budget.remaining_usd:
-            raise BudgetExceeded(
-                f"estimated ${estimate:.4f} exceeds the query budget (${budget.remaining_usd:.4f} left)"
-            )
+    def _reserve(self, estimate: float, budget: Budget | None) -> str:
+        """Hold the estimate against the query budget, then the spend cap; returns the ledger reservation."""
+        if budget is not None:
+            budget.reserve(estimate)
+        try:
+            return self.ledger.reserve(estimate, self.spend_cap_usd)
+        except BaseException:
+            if budget is not None:
+                budget.release(estimate)
+            raise
+
+    def _call(self, op: Callable[[], Any], estimate: float, budget: Budget | None) -> tuple[Any, int, str]:
+        """Run a paid call inside a reservation: a failed call releases it, a good one settles on record."""
+        hold = self._reserve(estimate, budget)
+        try:
+            out, attempts = self._with_retries(op)
+        except BaseException:
+            self.ledger.release(hold)
+            if budget is not None:
+                budget.release(estimate)
+            raise
+        return out, attempts, hold
 
     def _with_retries(self, op: Callable[[], Any]) -> tuple[Any, int]:
         attempt = 0
@@ -229,16 +262,24 @@ class ModelClient:
         if self.replay:
             raise ReplayMissError(f"replay: no cached response for {purpose} (key {key})")
         transport = self._network()
-        self._check_budget(estimate_usd(model, request), budget)
+        estimate = estimate_usd(model, request)
         start = time.perf_counter()
-        raw, attempts = self._with_retries(lambda: transport.create(request))
+        raw, attempts, hold = self._call(lambda: transport.create(request), estimate, budget)
         usage = _usage(raw)
         usd = token_usd(model, usage["input_tokens"], usage["output_tokens"])
         self.cache.put(key, raw)
         latency = round(time.perf_counter() - start, 3)
-        self.ledger.record(**common, usd=usd, cache_hit=False, latency_s=latency, attempts=attempts, **usage)
+        self.ledger.record(
+            **common,
+            usd=usd,
+            cache_hit=False,
+            latency_s=latency,
+            attempts=attempts,
+            reservation=hold,
+            **usage,
+        )
         if budget is not None:
-            budget.spent_usd += usd
+            budget.settle(estimate, usd)
         return _response(raw, usd=usd, cache_hit=False, attempts=attempts)
 
     def stream_text(
@@ -266,16 +307,18 @@ class ModelClient:
         transport = self._network()
         if frames is None and model not in TOKEN_PRICES_PER_M:
             raise KeyError(f"no price for model {model!r}")
-        self._check_budget(estimate_usd(model, request, frames), budget)
+        estimate = estimate_usd(model, request, frames)
         start = time.perf_counter()
-        text, attempts = self._with_retries(lambda: "".join(transport.stream(request)))
+        text, attempts, hold = self._call(lambda: "".join(transport.stream(request)), estimate, budget)
         # ASSUMPTION A-207: a streamed token-priced call is costed at its estimate (deltas carry no usage)
         usd = sam_usd(frames) if frames is not None else estimate_usd(model, request)
         self.cache.put(key, {"text": text})
         latency = round(time.perf_counter() - start, 3)
-        self.ledger.record(**common, usd=usd, cache_hit=False, latency_s=latency, attempts=attempts)
+        self.ledger.record(
+            **common, usd=usd, cache_hit=False, latency_s=latency, attempts=attempts, reservation=hold
+        )
         if budget is not None:
-            budget.spent_usd += usd
+            budget.settle(estimate, usd)
         return ModelResponse([], str(text), {}, usd, False, attempts, {"text": text})
 
 

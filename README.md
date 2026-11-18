@@ -18,7 +18,7 @@ The model proposes, and geometry decides.
 
 Self-driving cars are trained and tested on the **long tail**: a pedestrian half hidden by a parked car, a cyclist cutting across, a car reversing out of a driveway. These moments are rare, they matter most, and they're buried in hours of logs from six cameras and a LiDAR.
 
-Vision-language models can search video, but they say "yes" far too easily. On our 15 held-out queries, **96% of the claims a vision model made on its own were false** (375 of 391; `longtail/eval/runs/all-heldout/results/ablation_a.json`). A safety test set that holds a pedestrian who was never there costs real money and engineering time.
+Vision-language models can search video, but they say "yes" far too easily. On our 15 held-out queries, **96% of the object claims a vision model made on its own were false** by the dataset's labels: 375 of the 391 boxes Muse Spark Open cited as evidence (`longtail/eval/runs/all-heldout/results/ablation_a.json`). That rate isn't comparable with SAM 3.1's. SAM's claims are counted per box per frame, so there are far more of them, and 9.5% were false (79,343 of 836,194, configuration (b) in `ablation_b.json`). A safety test set that holds a pedestrian who was never there costs real money and engineering time.
 
 LongTail grounds every claim in a second sensor. It tracks objects with SAM 3.1, then checks each track against the LiDAR. Only findings that pass are shown, and the rest go to a "rejected by verifier" tab with the reason.
 
@@ -78,10 +78,12 @@ All results are on held-out data: 15 queries, 102 PandaSet scenes, 95% bootstrap
 
 | Configuration | Precision | Recall | P@10 | False claims caught | True claims wrongly rejected |
 |---|---|---|---|---|---|
-| (a) Muse Spark Open alone | 0.00 | 0.00 | 0.00 | n/a | n/a |
+| (a) Muse Spark Open alone | 0.00 | 0.00 | 0.00 | 0.89 [0.82, 0.97]\* | 0.81 [0.67, 1.00]\* |
 | (b) + SAM 3.1 tracks | 0.088 [0.044, 0.134] | 0.28 [0.19, 0.35] | 0.080 [0.033, 0.133] | n/a | n/a |
 | **(c) + LiDAR verification (headline, v1)** | **0.20 [0.13, 0.29]** | **0.20 [0.11, 0.32]** | **0.19 [0.07, 0.34]** | **0.59 [0.57, 0.60]** | **0.46 [0.44, 0.48]** |
 | (c) v2: the real-data fixes | 0.18 [0.13, 0.28] | 0.24 [0.14, 0.37] | 0.24 [0.11, 0.39] | 0.59 [0.57, 0.60] | 0.46 [0.44, 0.48] |
+
+\* (a)'s output doesn't use the verifier. These two rates come from running the verifier on the boxes (a) cites, each checked alone as a one-frame box (A-139), so they describe the verifier on (a)'s claims, not (a) itself. (b) runs no verifier, so it has neither rate (A-138).
 
 ![Ablation on the held-out queries: precision, recall, P@10 and catch rate for (a), (b) and (c)](docs/ablation-heldout.png)
 
@@ -95,8 +97,9 @@ All results are on held-out data: 15 queries, 102 PandaSet scenes, 95% bootstrap
   - the calibration shifted 2° and 0.3 m;
   - the LiDAR offset by 200 ms.
 
-  Each break lowered precision or recall on every split, so the evaluation can detect a broken verifier.
+  The harness (C8, A-141) counts a break as detected if precision, the catch rate or recall drops at all, by any amount. By that rule all three are detected on all four splits (102 and 29 scenes, held-out and dev). The rule is weak, and we count that as a limitation: one small drop is enough, there's no significance test, and a break can raise one metric while it lowers another. On the 102-scene dev split, the calibration break raised precision from 0.23 to 0.28 and passed only because recall fell (0.29 to 0.21). On the held-out split, only verifier off moves a metric outside the clean run's 95% interval (precision 0.064 [0.027, 0.106] against 0.20 [0.13, 0.29], and the catch rate from 0.59 to 0.00). The calibration and timing breaks lower precision and recall by amounts whose intervals overlap the clean run's. So the evaluation clearly detects a verifier that's switched off, but only weakly detects a miscalibrated or mistimed one.
 - **Cost:** the whole project's paid calls, the full evaluation included, came to about $68. See [docs/costs.md](docs/costs.md).
+- **Provenance: most result files record a "dirty" commit.** The `commit` field of the headline files reads `65d9457…-dirty`: (b) and (c) on the 102 held-out scenes, both v2 runs on the 102 scenes, and all four `breaks.json` files (14 of the 20 files carry it; the four (a) files and the 29-scene dev (b) and (c) are clean). `-dirty` means the checkout that wrote the file had uncommitted changes to tracked files (A-140), so the hash alone doesn't pin the code that ran. What [docs/eval-report.md](docs/eval-report.md) records of those changes: the v1 runs were scored with the scoring change later committed as `c446597`, which memoises label projections and reads the per-scene partials, and changes no metric; the v2 runs used the `v2-prereg` code (`851a833`) copied into a checkout still at `65d9457`, and the v2 thresholds hash `61e4c64ec1dae446` identifies them. A clean rerun from a committed tree is pending, so until then these numbers trace to those commits plus the changes described, not to one clean commit.
 
 The 25 queries come in three tiers: single object, behaviour and relational. A seeded random draw within each tier split them 10 development / 15 held-out (`longtail/eval/queries/queries.yaml`). Ground truth comes from the dataset's 3D labels, computed by a script inside a label guard that the pipeline can't open. Held-out queries were run once, at the end.
 
@@ -244,7 +247,8 @@ Live mode makes real, paid calls: Muse Wonder and SAM 3.1 on the Meta Model API,
 **What it costs.**
 - SAM 3.1 is listed at $0.016 per 80-frame camera clip ($0.20 per 1,000 frames).
 - At list price with nothing cached, a query over all 102 scenes is about $12.50. In practice it's much less, because the agent searches fewer scenes and responses are cached and shared across queries.
-- `LONGTAIL_QUERY_BUDGET_USD` caps each query's model calls, and `LONGTAIL_SPEND_CAP_USD` is a hard cap over everything in `runs/ledger.jsonl`. A call that would cross either cap is refused.
+- `LONGTAIL_QUERY_BUDGET_USD` caps what one search spends on all its paid calls: the planner, the agent and SAM 3.1. `LONGTAIL_SPEND_CAP_USD` is a hard cap over everything in `runs/ledger.jsonl`. Each paid call reserves its estimate against both before it's sent and settles at its real cost after, so concurrent calls can't all pass the same check. A call that would cross either cap is refused.
+- The default budget of $0.75 covers about 46 uncached camera clips, which is 2 to 7 scenes depending on how many object types the query names. Raise it for a wider live search. A scene that runs over the budget shows an error, and the agent finishes with what it found.
 - Verification runs on your machine and takes about 5 to 6 minutes a scene with 4 workers.
 
 ### Configuration
@@ -254,7 +258,7 @@ Live mode makes real, paid calls: Muse Wonder and SAM 3.1 on the Meta Model API,
 | `LONGTAIL_MODE` | `replay` (web server) | `live`, `replay` (every call from the cache) or `offline-demo` (synthetic scenes and a scripted model, for development only; shows a banner) |
 | `LONGTAIL_ALLOW_PAID` | `0` | `1` allows real, paid calls |
 | `LONGTAIL_SPEND_CAP_USD` | `5` | Hard cap over the ledger |
-| `LONGTAIL_QUERY_BUDGET_USD` | `0.75` | Model-call budget per query |
+| `LONGTAIL_QUERY_BUDGET_USD` | `0.75` | Budget per search for every paid call (planner, agent, SAM 3.1) |
 | `LONGTAIL_REPLAY` | `0` | `1` serves every model call from the cache and fails on a miss |
 | `LONGTAIL_DATA_DIR` | `./data` | Where PandaSet lives (`$LONGTAIL_DATA_DIR/pandaset/`) |
 | `LONGTAIL_CACHE_DIR` | `cache` | Model responses, SAM responses, parsed tracks, clips |
@@ -262,6 +266,9 @@ Live mode makes real, paid calls: Muse Wonder and SAM 3.1 on the Meta Model API,
 | `LONGTAIL_VERIFIER` | `v1` | `v2` selects the pre-registered real-data fixes |
 | `LONGTAIL_SAM_WORKERS` | `6` | Parallel SAM cache warming |
 | `LONGTAIL_RESUME` | off | `1` loads a scene already verified for the same spec from `runs/` (`longtail demo` sets it) |
+| `LONGTAIL_API_MAX_SEARCHES` | `2` | Searches the web server runs at once; one more gets HTTP 429 (busy) |
+| `LONGTAIL_API_JOB_TTL_S` | `3600` | How long the web server keeps a finished search's job status and trace |
+| `LONGTAIL_API_TOKEN` | unset | If set, every POST to the web server needs it (`Authorization: Bearer <token>`); open the web view as `/?token=<token>`. Unset for the local demo |
 
 **Data:** PandaSet comes from its Hugging Face mirror, fetched by HTTP range request straight into `$LONGTAIL_DATA_DIR/pandaset/`, so there's no 44.5 GB zip to download first.
 - `uv run python scripts/fetch_pandaset.py --parts labels` fetches the labels for all 103 scenes (0.12 GB).
@@ -274,7 +281,7 @@ The 30-scene index (`longtail/data/index.json`) is committed.
 ## Honesty rules we hold ourselves to
 
 - **No labels in the pipeline.** A label guard raises outside `eval_ground_truth()`, and a test enforces where that context may be used.
-- **One gate for paid calls.** Every paid call goes through one client with a cache, a ledger, a per-query budget, a spend cap, and a gate that's off by default.
+- **One gate for paid calls.** Every paid call goes through one of two clients: the model client (`longtail/llm/client.py`) for Muse Wonder and Muse Spark Open, or the SAM 3.1 client (`longtail/vision/sam_client.py`). Both have a response cache and share one paid-call gate that's off by default, one ledger and one spend cap. A search charges every paid call it makes, SAM included, to its per-query budget.
 - **Every assumption written down.** Every choice the plan didn't fix is in [docs/assumptions.md](docs/assumptions.md), tagged in the code and checked by a test (`tests/test_assumptions.py`).
 - **Nothing staged.** We never stage a hallucination for the video: the demo replays a real recorded run, call for call.
 - **Changes registered before results.** v2's changes and the rule for which version leads were tagged before v2 was run, and both versions are reported.
@@ -287,7 +294,7 @@ PandaSet by Hesai and Scale AI is licensed under CC BY 4.0 (https://creativecomm
 
 ## Built during the Meta Global AI Developer Hackathon
 
-All the code here was written during the build window of the **Meta Global AI Developer Hackathon** (Oct 26 to Nov 4, 2026). See [docs/build-log.md](docs/build-log.md) and the public commit history. The status of each task is in [docs/status-chethan.md](docs/status-chethan.md) and [docs/status-mayank.md](docs/status-mayank.md).
+The code we submitted was written during the build window of the **Meta Global AI Developer Hackathon** (Oct 26 to Nov 4, 2026). Fixes made after the window, starting Nov 18, are dated in [docs/build-log.md](docs/build-log.md) and the public commit history, and change no reported result. The status of each task is in [docs/status-chethan.md](docs/status-chethan.md) and [docs/status-mayank.md](docs/status-mayank.md).
 
 ## Team
 

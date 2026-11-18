@@ -162,8 +162,18 @@ def plan(
         if len(calls) != 1:
             err = f"expected exactly one tool call, got {len(calls)}"
             errors.append(err)
+            # every function call sent back needs its own output, or the API rejects the retry request
+            outputs = [
+                {
+                    "type": "function_call_output",
+                    "call_id": c.get("call_id", ""),
+                    "output": f"Invalid: {err}; this call was not run.",
+                }
+                for c in calls
+            ]
             history += [
                 *resp.output,
+                *outputs,
                 {"type": "message", "role": "user", "content": f"{err}. Call one tool."},
             ]
             continue

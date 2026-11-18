@@ -8,11 +8,15 @@ Tools the model can call:
 
 Stop rule: the model calls finish, or max_steps model calls pass, or the query budget runs out. The last two
 finish automatically with every verified finding found so far, so a search always ends with an answer.
+
+The query budget covers every paid call of the search: the planner, the agent's own calls, and the SAM 3.1
+calls made while searching scenes (A-250). SearchResult.usd is what the search spent on all of them.
 """
 
 import json
 import os
 import time
+import uuid
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -231,7 +235,7 @@ class SearchAgent:
                         trace,
                         searched,
                     )
-                output = self._run_tool(name, args, spec, found, searched, step, trace)
+                output = self._run_tool(name, args, spec, found, searched, step, trace, budget)
                 history.append(
                     {
                         "type": "function_call_output",
@@ -242,7 +246,8 @@ class SearchAgent:
         self._log(trace, TraceEvent(self.max_steps, "stop", "max_steps", {}))
         return self._auto_finish(query, spec, found, searched, "max_steps", budget, trace)
 
-    def _run_tool(self, name, args, spec, found, searched, step, trace) -> dict[str, Any]:
+    def _run_tool(self, name, args, spec, found, searched, step, trace, budget) -> dict[str, Any]:
+        usd_before = budget.spent_usd
         if args is None:
             out = {"error": "arguments were not valid JSON"}
         elif name == "list_scenes":
@@ -262,7 +267,13 @@ class SearchAgent:
                     self._log(trace, TraceEvent(step, "tool", "scene_done", _scene_summary(scene)))
 
             result: PipelineResult = run(
-                spec, todo, self.open_scene, self.track_source, self.run_root, progress=progress
+                spec,
+                todo,
+                self.open_scene,
+                self.track_source,
+                self.run_root,
+                progress=progress,
+                budget=budget,
             )
             searched += todo
             for f in result.findings():
@@ -275,7 +286,9 @@ class SearchAgent:
             }
         else:
             out = {"error": f"unknown tool {name!r}"}
-        self._log(trace, TraceEvent(step, "tool", str(name), {"args": args, "result": out}))
+        # the SAM calls a search_scenes made are charged to the budget; the trace shows what they cost
+        usd = budget.spent_usd - usd_before
+        self._log(trace, TraceEvent(step, "tool", str(name), {"args": args, "result": out}, usd))
         return out
 
     def _auto_finish(self, query, spec, found, searched, reason, budget, trace) -> SearchResult:
@@ -291,7 +304,9 @@ class SearchAgent:
         if dropped:
             self._log(trace, TraceEvent(len(trace), "stop", "finish_dropped", {"finding_ids": dropped}))
         rejected = sorted((f for f in found.values() if not f.verified), key=lambda f: -f.score)
-        search_id = f"search-{spec_run_id(spec)}"
+        # ASSUMPTION A-251: a search id is the spec hash plus a random suffix, so two searches with one spec
+        # never share search.json or reviews.jsonl; the per-scene verify runs stay keyed by the spec (reused)
+        search_id = f"search-{spec_run_id(spec)}-{uuid.uuid4().hex[:8]}"
         run_dirs = {sid: scene_run_dir(spec, sid, Path(".")).as_posix() for sid in searched}
         result = SearchResult(
             query,

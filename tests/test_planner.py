@@ -125,6 +125,30 @@ def test_clarification_returns_a_spec_that_asks(tmp_path):
     assert result.spec.actors == [] and result.spec.predicates == []
 
 
+def test_two_tool_calls_each_get_an_output_before_the_retry(tmp_path):
+    q = gold_queries()[0]
+    spec = model_args(q["gold"])
+    t = ScriptedTransport(
+        [
+            [call("emit_scenario_spec", spec, "c1"), call("ask_clarification", {"question": "Which?"}, "c2")],
+            [call("emit_scenario_spec", spec, "c3")],
+        ]
+    )
+    result = plan(q["text"], client_for(tmp_path, t))
+    assert result.attempts == 2 and "got 2" in result.errors[0]
+    retry = t.requests[1]["input"]
+    sent = [i["call_id"] for i in retry if i.get("type") == "function_call"]
+    answered = [i["call_id"] for i in retry if i.get("type") == "function_call_output"]
+    assert sent == ["c1", "c2"] and sorted(answered) == sorted(sent)
+    # each output comes after its call, and the re-prompt comes last
+    assert all(
+        retry.index(next(i for i in retry if i.get("call_id") == c and i["type"] == "function_call_output"))
+        > retry.index(next(i for i in retry if i.get("call_id") == c and i["type"] == "function_call"))
+        for c in sent
+    )
+    assert retry[-1]["role"] == "user" and "Call one tool" in retry[-1]["content"]
+
+
 def test_gives_up_after_three_bad_attempts(tmp_path):
     t = ScriptedTransport([[{"type": "message", "content": []}]] * 3)
     with pytest.raises(PlannerError):

@@ -7,7 +7,7 @@ import json
 from collections.abc import Iterable
 from importlib.metadata import version
 from pathlib import Path
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 from longtail.contracts import Track2D
 from longtail.data.base import Scene
@@ -15,6 +15,9 @@ from longtail.verify.config import load_verify_config
 from longtail.vision.clips import Clip, build_clip, cache_root
 from longtail.vision.sam_client import SamClient, transport_from_env
 from longtail.vision.sam_parse import parse
+
+if TYPE_CHECKING:
+    from longtail.llm.client import Budget
 
 # ASSUMPTION A-118: "halves" sends the left and right halves as two clips; right-half object ids are offset by
 # 1000 so the halves' tracks never collide; an object across the split may yield one track per half
@@ -68,16 +71,31 @@ def _tracks(
     concept: str,
     crop: Literal["full", "halves"],
     clip_cache: Path | None,
+    budget: "Budget | None" = None,
 ) -> list[Track2D]:
     if crop == "full":
         clip = build_clip(scene, camera, "full", clip_cache)
-        return _capped(cached_parse(client.segment(clip, concept).text, clip, concept))
+        return _capped(cached_parse(client.segment(clip, concept, budget).text, clip, concept))
     tracks = []
     for half, offset in (("left", 0), ("right", RIGHT_HALF_ID_OFFSET)):
         clip = build_clip(scene, camera, half, clip_cache)
-        for t in _capped(cached_parse(client.segment(clip, concept).text, clip, concept)):
+        for t in _capped(cached_parse(client.segment(clip, concept, budget).text, clip, concept)):
             tracks.append(t.model_copy(update={"obj_id": t.obj_id + offset}))
     return tracks
+
+
+def fetch(
+    client: SamClient,
+    scene: Scene,
+    camera: str,
+    concept: str,
+    crop: Literal["full", "halves"],
+    clip_cache: Path | None,
+    budget: "Budget | None",
+) -> None:
+    """Only the SAM call(s), into the response cache, charged to the budget; decoding is left to warm()."""
+    for half in ("full",) if crop == "full" else ("left", "right"):
+        client.segment(build_clip(scene, camera, half, clip_cache), concept, budget)
 
 
 def warm(
@@ -105,18 +123,33 @@ def sam_track_source(
     cameras: Iterable[str] | None = None,
     crop: Literal["full", "halves"] = "full",
     clip_cache: Path | None = None,
+    budget: "Budget | None" = None,
 ):
     """A TrackSource: (scene, camera, concept) -> Track2Ds from SAM 3.1, in full-image pixels.
 
     `source.warm(scene_id, camera, concept)` fills the same caches from another process (pipeline prefetch).
+    `source.with_budget(budget)` is the same source with every paid call charged to one query's budget
+    (A-250). Such a source has `source.fetch(scene, camera, concept)`, which makes the paid calls in this
+    process, where the budget lives, and its `warm` only decodes cached responses.
     """
     allowed = set(cameras) if cameras is not None else None
 
     def source(scene: Scene, camera: str, concept: str) -> list[Track2D]:
         if allowed is not None and camera not in allowed:
             return []
-        return _tracks(client, scene, camera, concept, crop, clip_cache)
+        return _tracks(client, scene, camera, concept, crop, clip_cache, budget)
 
     source.cameras = allowed  # type: ignore[attr-defined]
-    source.warm = functools.partial(warm, crop=crop, clip_cache=clip_cache, replay=client.replay)  # type: ignore[attr-defined]
+    source.warm = functools.partial(  # type: ignore[attr-defined]
+        warm, crop=crop, clip_cache=clip_cache, replay=True if budget is not None else client.replay
+    )
+
+    def with_budget(b: "Budget") -> object:
+        return sam_track_source(client, cameras=allowed, crop=crop, clip_cache=clip_cache, budget=b)
+
+    source.with_budget = with_budget  # type: ignore[attr-defined]
+    if budget is not None:
+        source.fetch = functools.partial(  # type: ignore[attr-defined]
+            fetch, client, crop=crop, clip_cache=clip_cache, budget=budget
+        )
     return source

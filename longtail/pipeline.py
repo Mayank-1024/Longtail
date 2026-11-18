@@ -10,6 +10,7 @@ from collections.abc import Callable
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 
@@ -18,6 +19,9 @@ from longtail.data.base import Scene
 from longtail.verify.config import verifier_version
 from longtail.verify.engine import TrackSource
 from longtail.verify.run import RUN_FILE, VerifyRun, load_run, verify_and_record
+
+if TYPE_CHECKING:
+    from longtail.llm.client import Budget
 
 # ASSUMPTION A-213: Glimmer triage is cut (plan cut list item 7): uniform 4 s windows with a 2 s stride
 WINDOW_S = 4.0
@@ -125,19 +129,34 @@ def prefetch(
     """Fill the track source's caches in parallel; returns the failed jobs (verify() retries them itself).
 
     Only for a source with a `warm` hook (the SAM one, A-229); anything else is left to verify() as before.
+    A source bound to a query budget also has a `fetch` hook: its paid calls run first, in threads of this
+    process where the budget lives, and the worker processes then only decode cached responses (A-250).
     """
     warm = getattr(track_source, "warm", None)
     if warm is None or workers <= 0:
         return []
     allowed = getattr(track_source, "cameras", None)
+    phrases = sorted({c for one in (spec if isinstance(spec, list) else [spec]) for c in concepts(one)})
+    scenes = {sid: open_scene(sid) for sid in scene_ids}
     jobs = [
         (sid, cam, c)
         for sid in scene_ids
-        for cam in open_scene(sid).cameras
+        for cam in scenes[sid].cameras
         if allowed is None or cam in allowed
-        for c in sorted({c for one in (spec if isinstance(spec, list) else [spec]) for c in concepts(one)})
+        for c in phrases
     ]
     failed = []
+    fetch = getattr(track_source, "fetch", None)
+    if fetch is not None:
+        # ASSUMPTION A-250: with a query budget, the paid SAM calls run in up to `workers` threads of this
+        # process, so each one is reserved against the one Budget object; worker processes only decode
+        with ThreadPoolExecutor(max_workers=max(1, min(workers, len(jobs)))) as threads:
+            calls = {threads.submit(fetch, scenes[sid], cam, c): (sid, cam, c) for sid, cam, c in jobs}
+            for f, job in calls.items():
+                try:
+                    f.result()
+                except Exception as e:
+                    failed.append(f"{'/'.join(job)}: {type(e).__name__}: {e}")
     with ProcessPoolExecutor(max_workers=max(1, min(workers, len(jobs)))) as pool:
         futures = {pool.submit(warm, *job): job for job in jobs}
         for f, job in futures.items():
@@ -156,14 +175,19 @@ def run(
     run_root: Path,
     workers: int = WORKERS,
     progress: Callable[[str, "SceneResult | None"], None] | None = None,
+    budget: "Budget | None" = None,
 ) -> PipelineResult:
     """Search the scenes. A scene that fails is reported with its error; it never stops the others.
 
     progress, if given, is called on the calling thread with ("tracked", None) once the SAM tracks are
     fetched, then ("scene", result) as each scene finishes, in finishing order (the web view's loader).
+    budget, if given, is charged for every paid SAM call (A-250), when the source supports it.
     """
     if spec.clarification is not None:
         raise ValueError("the spec asks a clarifying question; answer it before searching")
+    bind = getattr(track_source, "with_budget", None)
+    if budget is not None and bind is not None:
+        track_source = bind(budget)
 
     def one(scene_id: str) -> SceneResult:
         try:
